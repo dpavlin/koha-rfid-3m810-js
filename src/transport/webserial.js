@@ -1,5 +1,16 @@
 /*
  * Web Serial transport for the 3M 810 (Chromium and Firefox 151+ desktop).
+ *
+ * Copied from koha-rfid-go (webserial/transport-webserial.js, commit d198db0);
+ * the protocol it speaks was worked out in Biblio::RFID::Reader::3M810 — see
+ * README, "Provenance".
+ *
+ * Copyright (C) 2010-2026 Dobrica Pavlinusic <dpavlin@rot13.org>
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License as published by the Free Software
+ * Foundation; either version 2 of the License, or (at your option) any later
+ * version. See LICENSE in the repository root.
+ *
  * Uses only the standard API surface: requestPort/getPorts, port.open, the
  * readable/writable streams and reader/writer locks — nothing Chromium-specific.
  *

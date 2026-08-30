@@ -27,7 +27,7 @@ ssh "$HOST" "
 	test -d '$SRC'
 	sudo cp -a '$SRC/.' '$PLUGDIR/'
 	sudo chown -R $KOHA_USER_OS:$KOHA_USER_OS '$PLUGDIR'
-	sudo systemctl restart koha-plack
+	sudo koha-plack --restart '$INSTANCE' 
 	echo restored from $STAMP
 "
 echo "Check: ssh $HOST \"sudo grep 'RFID:' /var/log/koha/$INSTANCE/plack-error.log | tail\""

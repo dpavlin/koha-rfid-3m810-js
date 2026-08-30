@@ -1,6 +1,12 @@
 /*
  * Dormant-by-default bootstrap, inlined by the Koha plugin on a handful of pages.
  *
+ * Copyright (C) 2026 Dobrica Pavlinusic <dpavlin@rot13.org>
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License as published by the Free Software
+ * Foundation; either version 2 of the License, or (at your option) any later
+ * version. See LICENSE in the repository root.
+ *
  * The rule this file exists to enforce: a librarian whose workstation has no RFID
  * reader must notice nothing. So, in this order —
  *

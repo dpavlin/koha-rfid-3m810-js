@@ -1,6 +1,12 @@
 /*
  * App entry point.
  *
+ * Copyright (C) 2026 Dobrica Pavlinusic <dpavlin@rot13.org>
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License as published by the Free Software
+ * Foundation; either version 2 of the License, or (at your option) any later
+ * version. See LICENSE in the repository root.
+ *
  * M0 spike scope: open the granted port, wake the reader, do one inventory.
  * M1 replaces the inside of this file with the session state machine, the scan
  * loop and the toast/status UI; the page logic from koha-rfid.js moves in next

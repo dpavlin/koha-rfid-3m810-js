@@ -12,8 +12,12 @@ cd "$(dirname "$0")/.."
 
 HOST="${HOST:-koha-dev.rot13.org}"
 INSTANCE="${INSTANCE:-ffzg}"
+# Koha turns the class name into a path: Koha/Plugin/Rot13/RFID.pm, with the
+# plugin's own files in the RFID/ directory next to it (that is what
+# get_plugin_dir/pluginsdir resolve to). Deploying flat broke both lookups.
 PLUGDIR="/var/lib/koha/${INSTANCE}/plugins/Koha/Plugin/Rot13"
-PLUGPM="/var/lib/koha/${INSTANCE}/plugins/Koha/Plugin/Rot13/RFID.pm"
+PLUGPM="${PLUGDIR}/RFID.pm"
+ASSETS="${PLUGDIR}/RFID"
 BACKUPS="/var/lib/koha/${INSTANCE}/plugins-backup/rot13-rfid"
 KOHA_USER_OS="${INSTANCE}-koha"
 LOCAL_PLUGIN="plugin/Koha/Plugin/Rot13/RFID.pm"
@@ -27,7 +31,7 @@ make -s test
 
 echo "=== 2/5 backup on $HOST ==="
 STAMP=$(date +%Y%m%d-%H%M%S)
-ssh "$HOST" "sudo mkdir -p '$BACKUPS' && sudo cp -a '$PLUGDIR' '$BACKUPS/$STAMP' && ls -1dt $BACKUPS/*/ | tail -n +11 | xargs -r sudo rm -rf && echo backed up to $BACKUPS/$STAMP"
+ssh "$HOST" "sudo mkdir -p '$BACKUPS' && sudo cp -a '$PLUGDIR' '$BACKUPS/$STAMP' && ls -1dt '$BACKUPS'/*/ | tail -n +11 | xargs -r sudo rm -rf && echo backed up to $BACKUPS/$STAMP"
 
 echo "=== 3/5 upload to staging ==="
 STAGE="/tmp/rfid-deploy.$$"
@@ -51,13 +55,16 @@ fi
 echo "=== 5/5 install + restart plack ==="
 ssh "$HOST" "
 	set -e
+	sudo mkdir -p '$ASSETS'
 	sudo cp '$STAGE/RFID.pm' '$PLUGPM'
-	sudo cp '$STAGE/koha-rfid.json' '$PLUGDIR/koha-rfid.json'
-	sudo cp '$STAGE/koha-rfid.bundle.js' '$PLUGDIR/koha-rfid.bundle.js'
-	[ -f '$STAGE/koha-rfid.js' ] && sudo cp '$STAGE/koha-rfid.js' '$PLUGDIR/koha-rfid.js' || true
-	sudo chown -R $KOHA_USER_OS:$KOHA_USER_OS '$PLUGDIR' '$PLUGPM'
+	sudo cp '$STAGE/koha-rfid.json' '$ASSETS/koha-rfid.json'
+	sudo cp '$STAGE/koha-rfid.bundle.js' '$ASSETS/koha-rfid.bundle.js'
+	if [ -f '$STAGE/koha-rfid.js' ]; then sudo cp '$STAGE/koha-rfid.js' '$ASSETS/koha-rfid.js'; fi
+	sudo chown -R $KOHA_USER_OS:$KOHA_USER_OS '$PLUGDIR'
 	sudo rm -rf '$STAGE'
-	sudo systemctl restart koha-plack
+	# systemctl restart koha-plack is a no-op on this box (LSB unit reports
+	# exited); the instance wrapper is what actually recycles the starman master.
+	sudo koha-plack --restart '$INSTANCE'
 	echo deployed
 "
 

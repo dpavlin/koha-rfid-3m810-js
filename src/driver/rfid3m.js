@@ -1,7 +1,15 @@
 /*
  * 3M 810 RFID reader in JavaScript — Web Serial, no server, no dependencies.
  *
- * JS port of internal/rfid/{reader,rfid501}.go + internal/rfidops/ops.go.
+ * JS port of internal/rfid/{reader,rfid501}.go + internal/rfidops/ops.go
+ * (koha-rfid-go), of the protocol worked out in Biblio::RFID::Reader::3M810 —
+ * see https://github.com/dpavlin/Biblio-RFID and README, "Provenance".
+ *
+ * Copyright (C) 2010-2026 Dobrica Pavlinusic <dpavlin@rot13.org>
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License as published by the Free Software
+ * Foundation; either version 2 of the License, or (at your option) any later
+ * version. See LICENSE in the repository root.
  * No parameter validation: every caller is in this repo.
  *
  * Transport contract (Web Serial / Node / fake all implement it):
