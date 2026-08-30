@@ -1,0 +1,16 @@
+{
+	"pages": [
+		"circ/returns.pl",
+		"circ/circulation.pl",
+		"circ/circulation-home.pl",
+		"circ/renew.pl",
+		"catalogue/moredetail.pl",
+		"mainpage.pl"
+	],
+	"branches": [],
+	"users": [],
+	"legacy": true,
+	"hint": true,
+	"bookPrefix": "130",
+	"debug": true
+}

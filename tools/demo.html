@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3M 810 RFID over Web Serial</title>
+<style>
+	:root { color-scheme: light dark; }
+	body { font: 15px/1.5 system-ui, sans-serif; margin: 0; padding: 1.5rem; max-width: 62rem; }
+	h1 { font-size: 1.2rem; margin: 0 0 .25rem; }
+	.row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin: .75rem 0; }
+	button { font: inherit; padding: .35rem .7rem; border-radius: .4rem; border: 1px solid color-mix(in oklab, currentColor 35%, transparent); background: transparent; cursor: pointer; }
+	button:disabled { opacity: .45; cursor: default; }
+	button.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+	input[type=text] { font: inherit; padding: .35rem .5rem; border-radius: .4rem; border: 1px solid #8884; background: transparent; width: 16rem; }
+	table { border-collapse: collapse; width: 100%; margin-top: .5rem; }
+	th, td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid #8883; font-variant-numeric: tabular-nums; }
+	td.sid { font-family: ui-monospace, monospace; }
+	.afi { padding: .05rem .4rem; border-radius: 999px; font-size: .8rem; font-weight: 600; }
+	.afi.da { background: #16a34a33; } .afi.d7 { background: #ef444433; }
+	#status { font-weight: 600; }
+	#log { font-family: ui-monospace, monospace; font-size: .75rem; white-space: pre; overflow: auto; height: 14rem; border: 1px solid #8883; border-radius: .4rem; padding: .5rem; margin-top: 1rem; }
+	tr.sel td { background: color-mix(in oklab, #2563eb 22%, transparent); }
+	small { opacity: .7; }
+</style>
+</head>
+<body>
+<h1>3M 810 RFID reader &mdash; Web Serial</h1>
+<p><small>No server, no extension: this page talks to the reader over <code>navigator.serial</code>. Requires a browser with Web Serial &mdash; Chrome/Edge/Brave, or Firefox 151+ &mdash; and a secure context (https:// or http://localhost). Nothing is sent anywhere.</small></p>
+
+<div class="row">
+	<button id="connect" class="primary">Connect reader</button>
+	<button id="probe" disabled>Probe</button>
+	<button id="disconnect" disabled>Disconnect</button>
+	<label><input type="checkbox" id="auto" checked> auto-scan (1 s)</label>
+	<span id="status">not connected</span>
+</div>
+
+<table>
+	<thead><tr><th></th><th>SID</th><th>AFI</th><th>Barcode</th><th></th></tr></thead>
+	<tbody id="tags"><tr><td colspan="5"><small>Connect a reader and put a tag on the pad.</small></td></tr></tbody>
+</table>
+
+<div class="row">
+	<input type="text" id="barcode" placeholder="barcode, or blank / 3mblank" maxlength="16">
+	<button id="program" disabled>Program selected tag</button>
+</div>
+<p><small>Programming writes 8 RFID501 blocks then sets AFI: <code>130&hellip;</code> &rarr; DA (secure), anything else &rarr; D7. Blank writes the factory blank tag.</small></p>
+
+<div class="row">
+	<button id="secure" disabled>Selected &rarr; DA</button>
+	<button id="unsecure" disabled>Selected &rarr; D7</button>
+	<button id="clear">Clear log</button>
+</div>
+
+<div id="log"></div>
+
+<script type="module">
+import { Reader3M, AFI_SECURE, AFI_UNSECURE } from './rfid3m.js';
+import { SerialTransport } from './transport-webserial.js';
+
+const $ = (id) => document.getElementById(id);
+const log = (dir, msg) => {
+	const el = $('log');
+	el.textContent += `${new Date().toISOString().slice(11, 23)} ${dir} ${msg}\n`;
+	if (el.textContent.length > 200000) el.textContent = el.textContent.slice(-100000);
+	el.scrollTop = el.scrollHeight;
+};
+
+let transport = null, reader = null, selected = null, scanning = null, epoch = 0;
+
+const say = (s, bad = false) => { $('status').textContent = s; $('status').style.color = bad ? '#ef4444' : ''; };
+
+function ui(connected) {
+	$('connect').disabled = connected;
+	for (const id of ['probe', 'disconnect', 'program', 'secure', 'unsecure']) $(id).disabled = !connected;
+}
+
+async function stopScan() {
+	if (scanning) { clearTimeout(scanning); scanning = null; }
+}
+
+async function connect(port) {
+	const my = ++epoch;
+	transport = new SerialTransport(port, { log: (d, m) => log(d, m) });
+	try {
+		await transport.open();
+	} catch (e) {
+		say('cannot open port: ' + e.message, true);
+		log('!!', e.message);
+		transport = null;
+		return;
+	}
+	reader = new Reader3M(transport, { log: (d, m) => log(d, m) });
+	ui(true);
+	say('connected');
+	await probe();
+	loop(my);
+}
+
+async function probe() {
+	try {
+		const v = await reader.probe();
+		say('connected, reader ' + v);
+	} catch (e) {
+		say('no answer to probe: ' + e.message, true);
+		log('!!', e.message);
+	}
+}
+
+async function disconnect() {
+	epoch++; // invalidates any scan in flight
+	await stopScan();
+	say('disconnecting...');
+	ui(false);
+	try {
+		if (reader) await reader.close();
+	} catch (e) {
+		log('!!', 'close: ' + e.message);
+	}
+	reader = null; transport = null; selected = null;
+	ui(false);
+	say('not connected');
+	$('tags').innerHTML = '<tr><td colspan="5"><small>Connect a reader and put a tag on the pad.</small></td></tr>';
+}
+
+async function scanOnce(my = epoch) {
+	let tags;
+	try {
+		({ tags } = await reader.scan());
+	} catch (e) {
+		if (my === epoch) say('scan failed: ' + e.message, true);
+		return;
+	}
+	say(`connected, ${tags.length} tag${tags.length === 1 ? '' : 's'} in the field`);
+	const body = $('tags');
+	body.innerHTML = '';
+	for (const t of tags) {
+		const tr = document.createElement('tr');
+		if (selected === t.sid) tr.className = 'sel';
+		tr.onclick = () => { selected = t.sid; document.querySelectorAll('tr.sel').forEach((x) => x.classList.remove('sel')); tr.classList.add('sel'); };
+		tr.innerHTML = `<td></td><td class="sid">${t.sid.toUpperCase()}</td>
+			<td><span class="afi ${t.security.toLowerCase()}">${t.security || '--'}</span></td>
+			<td>${t.content || ''}</td>
+			<td><button data-act="da">DA</button> <button data-act="d7">D7</button></td>`;
+		tr.querySelector('[data-act=da]').onclick = (ev) => { ev.stopPropagation(); secure(t.sid, AFI_SECURE); };
+		tr.querySelector('[data-act=d7]').onclick = (ev) => { ev.stopPropagation(); secure(t.sid, AFI_UNSECURE); };
+		body.append(tr);
+	}
+	if (!tags.length) body.innerHTML = '<tr><td colspan="5"><small>(no tags in the field)</small></td></tr>';
+}
+
+async function loop(my = epoch) {
+	await stopScan();
+	if (!$('auto').checked || !reader || my !== epoch) { if (my === epoch) say('auto-scan off'); return; }
+	await scanOnce(my);
+	if (my === epoch) scanning = setTimeout(() => loop(my), 1000);
+}
+
+async function secure(sid, afi) {
+	await stopScan();
+	log('**', `secure ${sid.toUpperCase()} -> ${afi.toString(16)}`);
+	const res = await reader.secure([{ sid, afi }]);
+	say(res.ok ? `AFI ${afi.toString(16).toUpperCase()} written` : 'secure failed: ' + res.error, !res.ok);
+	if ($('auto').checked) loop();
+}
+
+$('connect').onclick = async () => {
+	const known = await SerialTransport.remembered();
+	if (known.length === 1) {
+		say('opening authorised port...');
+		return connect(known[0]);
+	}
+	say('pick a device in the browser dialog');
+	log('**', 'opening the serial device chooser');
+	const port = await SerialTransport.pick();
+	if (!port) return say('no device selected', true);
+	await connect(port);
+};
+$('probe').onclick = probe;
+$('disconnect').onclick = disconnect;
+$('auto').onchange = () => ($('auto').checked ? loop() : stopScan());
+$('clear').onclick = () => { $('log').textContent = ''; };
+
+$('secure').onclick = () => selected && secure(selected, AFI_SECURE);
+$('unsecure').onclick = () => selected && secure(selected, AFI_UNSECURE);
+
+$('program').onclick = async () => {
+	if (!selected) return say('select a tag first', true);
+	await stopScan();
+	const content = $('barcode').value.trim();
+	if (!content) return say('enter a barcode', true);
+	say('programming ' + selected.toUpperCase() + '...');
+	const res = await reader.program([{ sid: selected, content }]);
+	say(res.ok ? `programmed ${content}` : 'program failed: ' + res.errors.join('; '), !res.ok);
+	if ($('auto').checked) loop();
+};
+
+// remember the previously authorised port so a page reload does not need the chooser
+const known = await SerialTransport.remembered();
+if (known.length) say(`${known.length} authorised port${known.length > 1 ? 's' : ''} - click Connect`);
+</script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+# Real 3M 810 session capture (2026-08-30, via usbip tunnel of FTDI FT232B on aimax)
+# Captured with: ./build/linux/scan -port /dev/ttyUSB1 -debug
+# >> = host->reader, raw bytes as written, CRC included
+# << = reader->host: frame prefix + 2-byte length + payload. The capture tool's
+#    frame parser had already consumed the trailing CRC, so response lines in
+#    this file do NOT carry one (tests/js/webserial.test.mjs adds it back).
+>> d500050400118c66
+<< d5 00 09 0400110a050002
+>> d60005fe0005fa40
+<< d6 00 17 fe00000502e004010031269117e00401001f77fb98
+>> d6000b0ae004010031269117ec84
+<< d6 00 0d 0a00e004010031269117da
+>> d6000d02e00401003126911700084e9b
+<< d6 00 3d 0200e00401003126911708000004110001010031333032020030393939030039390000040000000000050000000000060000000000070000000000
+>> d6000b0ae00401001f77fb9894e8
+<< d6 00 0d 0a00e00401001f77fb98da
+>> d6000d02e00401001f77fb9800086241
+<< d6 00 3d 0200e00401001f77fb9808000004110000010032303030020030303030030030303432040000000000050000000000060000000000070000000000
+# Decoded: E004010031269117 AFI=DA content=1302099999 (Book)
+#          E00401001F77FB98 AFI=DA content=200000000042 (patron card, non-130)
+# Reader hardware version: 10.5.0.2
