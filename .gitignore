@@ -1,6 +1,10 @@
 node_modules/
 package-lock.json
-.pi/
+# .pi is scratch, except the live-verification helpers: those are the difference
+# between "the plugin works" and having evidence, and they are useless if they can
+# vanish with the working directory.
+.pi/*
+!.pi/browser-execute-workspace/
 plugin/Koha/Plugin/Rot13/RFID/koha-rfid.js
 *.rejected
 koha-plugin-rfid-*.kpz
