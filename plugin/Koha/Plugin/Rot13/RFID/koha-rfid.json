@@ -12,5 +12,6 @@
 	"hint": true,
 	"bookPrefix": "130",
 	"programming": true,
+	"autoCheckin": true,
 	"debug": true
 }

@@ -42,6 +42,8 @@
 
 import { boot as bootReader, watch } from '../main.js';
 import { programTag, readTag } from './tagwrite.js';
+import { session as checkinSession, readCheckinResult } from './checkin.js';
+import { toasts } from './toast.js';
 
 const VERSION = '0.1.0';
 const ARM_KEY = 'rfid_armed';
@@ -143,6 +145,7 @@ export function install(win, { now = () => Date.now() } = {}) {
 			} else if (m0.gate === 'disarmed') {
 				title = 'RFID reader: disarmed (click to connect)';
 			}
+			if (m0.lastOutcome) title += `; last check-in ${m0.lastOutcome.barcode} ${m0.lastOutcome.ok ? 'ok' : 'not confirmed'}`;
 			const flashing = m0.pulseUntil && now() < m0.pulseUntil;
 			hint.textContent = text;
 			hint.title = `${title}${m0.watching ? ' (watching)' : ''} — click, or Ctrl+Alt+R`;
@@ -164,6 +167,14 @@ export function install(win, { now = () => Date.now() } = {}) {
 		);
 	};
 
+	// The check-in form, picked by where it posts to. Not by the field name: Koha
+	// reuses name=barcode for renewal, which checks an item in *and issues it back*
+	// out with a new due date.
+	const checkinForm = () => {
+		if (!win.document || !win.document.forms) return null;
+		return [...win.document.forms].find((f) => /circ\/returns\.pl$/.test(f.getAttribute('action') || '')) || null;
+	};
+
 	// M1's first slice of page logic, deliberately small: put a scanned barcode in
 	// the check-in box and let the librarian press Return. Books first, because a
 	// patron card on the pad is just another 10-digit barcode as far as we know.
@@ -173,10 +184,10 @@ export function install(win, { now = () => Date.now() } = {}) {
 	// that is on the pad should take its place.
 	const fillCheckin = ({ replaceStale = false } = {}) =>
 		safe('fill checkin', () => {
-			if (cfg.fillCheckin === false || !win.document || !win.document.forms) return;
+			if (cfg.fillCheckin === false) return;
 			const seen = (m0.tags || []).filter((t) => t.content);
 			if (!seen.length) return;
-			const form = [...win.document.forms].find((f) => /circ\/returns\.pl$/.test(f.getAttribute('action') || ''));
+			const form = checkinForm();
 			if (!form || !form.elements || !form.elements['barcode']) return;
 			const field = form.elements['barcode'];
 			if (field.value) {
@@ -194,6 +205,45 @@ export function install(win, { now = () => Date.now() } = {}) {
 			note('checkin filled', `${pick.content} (sid ${pick.sid}) from ${seen.length} tag(s) on the pad`);
 		});
 
+	// --- the check-in session: one check-in outlives the page that posted it ----
+	const toast = cfg.toasts === false ? () => {} : safe('toasts', () => toasts(win)) || (() => {});
+	const sstore = {
+		getItem: (k) => safe('sessionStorage.get', () => win.sessionStorage.getItem(k)),
+		setItem: (k, v) => safe('sessionStorage.set', () => win.sessionStorage.setItem(k, v)),
+		removeItem: (k) => safe('sessionStorage.del', () => win.sessionStorage.removeItem(k)),
+	};
+
+	// Posting is the last thing this page does: the form navigates, the reader goes
+	// with it, and the next page load picks the story up from sessionStorage.
+	const postCheckin = (barcode) =>
+		safe('post check-in', () => {
+			const form = checkinForm();
+			if (!form || !form.elements || !form.elements['barcode']) return false;
+			form.elements['barcode'].value = barcode;
+			stopWatch('check-in posted');
+			form.submit();
+			return true;
+		});
+
+	const checkins =
+		cfg.autoCheckin === true
+			? checkinSession({
+					store: sstore,
+					now,
+					bookPrefix: cfg.bookPrefix,
+					ttlMs: ((cfg.checkinTtl || 60)) * 1000,
+					submit: postCheckin,
+					log: note,
+					onOutcome: (outcome, barcode) => {
+						m0.lastOutcome = { at: now(), barcode, ok: outcome.ok };
+						// Success is announced; Koha shows its own failures, in context, better
+						// than a blunter copy of them could.
+						if (outcome.ok) toast(`✓ checked in ${barcode}`);
+						paint();
+					},
+				})
+			: null;
+
 	const start = async (ports) => {
 		m0.gate = 'booting';
 		const { out, reader: r, transport: t } = await bootReader({ port: ports[0], log: (s, d) => note(s, d) });
@@ -204,8 +254,14 @@ export function install(win, { now = () => Date.now() } = {}) {
 		note('gate', m0.gate);
 		paint();
 		if (m0.gate === 'ready') {
-			fillCheckin();
-			startWatch();
+			if (checkins) {
+				checkins.report(readCheckinResult(win.document));
+				// pump() navigates when it posts something; then the pad is not ours
+				if (!checkins.pump(m0.tags)) startWatch();
+			} else {
+				fillCheckin();
+				startWatch();
+			}
 		}
 		return m0;
 	};
@@ -278,7 +334,10 @@ export function install(win, { now = () => Date.now() } = {}) {
 						` (${m0.tags.length} on the pad)`,
 				);
 				pulse();
-				fillCheckin({ replaceStale: true });
+				if (checkins) {
+					checkins.forget(removed.map((t) => t.content));
+					if (checkins.pump(m0.tags)) return; // posted; the page is going away
+				} else fillCheckin({ replaceStale: true });
 			},
 			onError: (msg, n) => note(n ? `watch error #${n}` : 'watch error', msg),
 			onStop: (why) => {
@@ -343,8 +402,16 @@ export function install(win, { now = () => Date.now() } = {}) {
 		return entry;
 	};
 
+	// The surface a human types at. `inventory` is the cheap look at the pad (one
+	// command, no EPC memory read) and `stop` hands the port back — the CLI cannot
+	// open it while a browser tab is holding it.
+	m0.inventory = () => (reader ? reader.inventory() : Promise.resolve(null));
+	m0.stop = stop;
+
 	m0.scan = scan;
 	m0.rescan = rescan;
+	m0.checkins = checkins;
+	m0.toast = toast;
 	m0.program = program;
 	m0.readTag = (sid) => (reader ? readTag({ reader, sid }) : Promise.resolve({ error: 'not connected' }));
 	m0.canProgram = cfg.programming === true;

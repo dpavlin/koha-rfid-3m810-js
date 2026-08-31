@@ -121,6 +121,22 @@ test('the corner element reports what the reader is doing, including failures', 
 	assert.equal(m0.filled, undefined, 'nothing is typed into the page on a failure');
 });
 
+test('the console surface survives a broken reader', async () => {
+	// Debugging a reader you cannot connect to is done by typing into devtools, so the
+	// surface has to exist even when nothing opened. A rewrite of this file once
+	// silently dropped inventory() and stop() from it — the page still looked fine.
+	const { win } = fakeWindow({ serial: true, armed: true, ports: [deadPort()] });
+	const m0 = install(win);
+	await m0.done;
+
+	for (const fn of ['connect', 'scan', 'rescan', 'program', 'readTag', 'inventory', 'stop'])
+		assert.equal(typeof m0[fn], 'function', `${fn} is there to type`);
+	assert.equal(await m0.inventory(), null, 'no reader: inventory answers nothing, and never throws');
+
+	await m0.stop();
+	assert.equal(m0.gate, 'disarmed');
+});
+
 test('?rfid=0 disarms and says so', async () => {
 	const { win, storage } = fakeWindow({ serial: true, armed: true, search: '?rfid=0' });
 	const m0 = install(win);
