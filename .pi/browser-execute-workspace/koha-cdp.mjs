@@ -14,8 +14,36 @@
 //   await session.connect()
 //   const t = await k.open(session, 'https://.../circ/returns.pl')
 //   return await k.probe(session, t)
+//
+// HOW TO WRITE THE SNIPPET (learned the slow way, twice):
+//   Put the body in a file under tools/live/ exporting run(session, k), and send
+//   browser_execute only the import + call. Then `node --check tools/live/x.mjs`
+//   catches a syntax error with a filename and a line number *before* the browser is
+//   touched — a parse error inside browser_execute's own wrapper reports neither, and
+//   escaped regexes inside template literals (`\\s+`) hit exactly that dead end.
+//   For runtime state use trace(): it appends to /tmp/cdp-trace.log, which is still
+//   there when the snippet threw halfway, unlike a return value.
+
+import { appendFileSync } from 'node:fs';
+import { Script } from 'node:vm';
 
 const KOHA_BASE = 'https://ffzg.koha-dev.rot13.org:8443/cgi-bin/koha';
+export const TRACE_FILE = '/tmp/cdp-trace.log';
+
+/** Append to a log file: survives the throw, and is readable after the call returns. */
+export function trace(...parts) {
+	try {
+		appendFileSync(TRACE_FILE, `${new Date().toISOString().slice(11, 19)} ${parts.map((p) => (typeof p === 'string' ? p : JSON.stringify(p))).join(' ')}\n`);
+	} catch {
+		/* logging must never be the reason a verification fails */
+	}
+}
+
+/** trace + return, for inlining into a chain: return await k.step('issued', {...}) */
+export function step(label, value) {
+	trace(label, value);
+	return value;
+}
 
 export function url(page, params = {}) {
   const q = new URLSearchParams({ ...params, cb: String(Date.now()) });
@@ -55,14 +83,34 @@ export async function waitForLoad(session, timeoutMs = 20000) {
   return 'timeout';
 }
 
+/**
+ * Compile the page expression here, where a mistake costs milliseconds and names the
+ * line. Without this, one missing brace on line 5 of a big JSON.stringify came back as
+ * "snippet threw: SyntaxError: Unexpected token ')'", which points at the browser_execute
+ * snippet and not at the expression, and sent me looking in the wrong file twice.
+ */
+function parseCheck(expression) {
+  try {
+    new Script('(' + expression + ')');
+  } catch (e) {
+    const where = (e.stack || '').split('\n').slice(1, 4).join('\n');
+    throw new Error('page expression will not parse: ' + e.message + '\n' + where);
+  }
+}
+
 export async function evaluate(session, expression) {
+  parseCheck(expression);
   const res = await session._call('Runtime.evaluate', {
     expression,
     returnByValue: true,
     awaitPromise: true,
   });
   if (res.exceptionDetails) {
-    throw new Error(res.exceptionDetails.exception?.description || 'eval threw: ' + expression.slice(0, 60));
+    // Do NOT report only the page's message: a page-side SyntaxError then looks
+    // exactly like the browser_execute snippet failing to parse, and the search for
+    // the typo goes to the wrong file. Always name the expression.
+    const d = res.exceptionDetails.exception?.description || res.exceptionDetails.text || 'unknown';
+    throw new Error('page eval failed: ' + d.split('\n')[0] + ' — in: ' + expression.replace(/\s+/g, ' ').slice(0, 90));
   }
   return res.result?.value;
 }
@@ -115,18 +163,28 @@ export async function login(session, { envFile = process.env.HOME + '/koha-dev.e
 	);
 	if (!env.KOHA_USER || !env.KOHA_PASS) throw new Error('KOHA_USER/KOHA_PASS missing from ' + envFile);
 
+	// "Are we already in?" is answered by the absence of the login form, not by a header
+	// widget: this fork's header has no #user-info, and testing for one made every
+	// logged-in session look like a logged-out one — which then fell through to
+	// "submit document.forms[0]" and quietly submitted the patron search box. Only
+	// #loginform is ever submitted, and a page without it is treated as logged in.
+	// #patronsearch is the header's patron quick-search: the staff header is rendered only
+	// for a logged-in session, and this fork's header shows no "Log out" text to look for.
+	const loggedIn = `!document.getElementById('loginform') && !!document.getElementById('patronsearch')`;
 	await session._call('Page.navigate', { url: `${base}/mainpage.pl` });
 	await new Promise((r) => setTimeout(r, 1500));
-	const already = await evaluate(session, `!!document.querySelector('#user-info')`);
-	if (already) return 'already';
+	if (await evaluate(session, loggedIn)) return 'already';
 
-	const form = await evaluate(session, `(() => { const f = document.getElementById('loginform') || document.forms[0]; if (!f) return null;
-		if (document.getElementById('userid')) { document.getElementById('userid').value = ${JSON.stringify(env.KOHA_USER)}; }
-		if (document.getElementById('password')) { document.getElementById('password').value = ${JSON.stringify(env.KOHA_PASS)}; }
-		HTMLFormElement.prototype.submit.call(f); return f.id || 'forms[0]'; })()`);
-	if (!form) throw new Error('no login form on the page — Koha did not ask for credentials');
+	const form = await evaluate(
+		session,
+		`(() => { const f = document.getElementById('loginform'); if (!f) return null;
+			if (document.getElementById('userid')) { document.getElementById('userid').value = ${JSON.stringify(env.KOHA_USER)}; }
+			if (document.getElementById('password')) { document.getElementById('password').value = ${JSON.stringify(env.KOHA_PASS)}; }
+			// 18.11: <input name="submit"> shadows the method, so f.submit() is not a function
+			HTMLFormElement.prototype.submit.call(f); return f.id; })()`,
+	);
+	if (!form) throw new Error('no #loginform on the page — Koha did not ask for credentials, and nothing else gets submitted');
 
 	await new Promise((r) => setTimeout(r, 4000));
-	const ok = await evaluate(session, `!!document.querySelector('#user-info')`);
-	return ok ? 'logged in' : 'login failed (form "' + form + '" submitted, no #user-info afterwards)';
+	return (await evaluate(session, loggedIn)) ? 'logged in' : 'login failed (#loginform still offered — wrong credentials or intranet auth changed)';
 }

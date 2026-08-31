@@ -1,0 +1,1700 @@
+<html lang="en"><head>
+
+
+<title>Koha › Circulation
+
+  › Checking out to         Pavlinušić, Dobrica  (200000000042)
+
+</title>
+
+
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+    
+
+
+<link rel="shortcut icon" href="/intranet-tmpl/prog/img/favicon.ico" type="image/x-icon">
+
+<link href="/intranet-tmpl/lib/jquery/jquery-ui-1.11.4.min_18.1200031.css" rel="stylesheet" type="text/css">
+<link rel="stylesheet" type="text/css" href="/intranet-tmpl/lib/bootstrap/bootstrap.min_18.1200031.css">
+<link rel="stylesheet" type="text/css" href="/intranet-tmpl/lib/bootstrap/bootstrap-theme.min_18.1200031.css">
+<link href="/intranet-tmpl/lib/font-awesome/css/font-awesome.min_18.1200031.css" type="text/css" rel="stylesheet">
+<link href="/intranet-tmpl/prog/css/buttons.dataTables.min_18.1200031.css" rel="stylesheet" type="text/css">
+<link rel="stylesheet" type="text/css" href="/intranet-tmpl/prog/css/datatables_18.1200031.css">
+<link media="print" rel="stylesheet" type="text/css" href="/intranet-tmpl/prog/css/print_18.1200031.css">
+
+
+
+
+    <link href="/intranet-tmpl/prog/css/staff-global_18.1200031.css" type="text/css" rel="stylesheet">
+
+
+<!-- local colors -->
+
+
+
+
+
+<style>.results_summary {
+  font-size: 120%;
+  color: black;
+}
+
+#addbibliotabs {
+  width: 743px !important;
+}
+#toolbar {
+    width: 743px !important;
+}
+
+.input_marceditor {
+  width: 30em !important;
+}
+
+.subfield {
+  width: 18em !important;
+}
+
+/*
+div.subfield_line label {
+  width: 22em !important;
+}
+*/
+
+.modal-dialog {
+   margin: 400px auto;
+}</style>
+
+
+
+
+
+</head>
+
+<body id="circ_circulation" class="circ">
+
+
+
+
+<nav class="navbar">
+    <div class="navbar-header">
+        <a href="#" class="header-menu-link collapsed" data-toggle="collapse" data-target="#header" aria-expanded="false" aria-controls="header">
+            <i class="fa fa-bars"></i> Menu
+        </a>
+    </div>
+    <div id="header" class="navbar-collapse collapse">
+        <ul id="toplevelmenu" class="nav navbar-nav">
+            <li><a href="/cgi-bin/koha/circ/circulation-home.pl">Circulation</a></li>
+            <li><a href="/cgi-bin/koha/members/members-home.pl">Patrons</a></li>
+            <li id="catalog-search-link">
+                <a href="/cgi-bin/koha/catalogue/search.pl">Search</a>
+            </li>
+            <li class="dropdown" id="catalog-search-dropdown">
+                <a href="/cgi-bin/koha/catalogue/search.pl" class="dropdown-toggle" data-toggle="dropdown"><b class="caret"></b></a>
+                <ul class="dropdown-menu dropdown-menu-right">
+                    <li><a href="/cgi-bin/koha/catalogue/search.pl">Advanced search</a></li>
+                    <li><a href="/cgi-bin/koha/catalogue/itemsearch.pl">Item search</a></li>
+                </ul>
+            </li>
+            
+                <li>
+                    <a href="#" id="cartmenulink">Cart<span id="basketcount"></span></a>
+                </li>
+            
+            
+            <li class="dropdown">
+                <a href="/cgi-bin/koha/mainpage.pl" class="dropdown-toggle" data-toggle="dropdown">More <b class="caret"></b></a>
+                <ul class="dropdown-menu dropdown-menu-right">
+                    <li><a href="/cgi-bin/koha/virtualshelves/shelves.pl">Lists</a></li>
+                    
+                        <li><a href="/cgi-bin/koha/cataloguing/addbooks.pl">Cataloging</a></li>
+                    
+                    
+                        <li><a href="/cgi-bin/koha/acqui/acqui-home.pl">Acquisitions</a></li>
+                    
+                    <li><a href="/cgi-bin/koha/authorities/authorities-home.pl">Authorities</a></li>
+                    
+                    
+                        <li><a href="/cgi-bin/koha/serials/serials-home.pl">Serials</a></li>
+                    
+                    
+                        <li><a href="/cgi-bin/koha/course_reserves/course-reserves.pl">Course reserves</a></li>
+                    
+                    
+                        <li><a href="/cgi-bin/koha/reports/reports-home.pl">Reports</a></li>
+                    
+                    
+                        <li><a href="/cgi-bin/koha/tools/tools-home.pl">Tools</a></li>
+                    
+                    
+                        <li><a href="/cgi-bin/koha/admin/admin-home.pl">Administration</a></li>
+                    
+                    <li><a href="/cgi-bin/koha/about.pl">About Koha</a></li>
+                </ul>
+            </li>
+        </ul>
+    </div>
+        <ul id="user-menu" class="nav navbar-nav navbar-right">
+            
+            <li class="dropdown">
+                <a href="#" id="logged-in-menu" role="button" class="dropdown-toggle" data-toggle="dropdown">
+                    <span id="logged-in-info-brief">
+                        <i class="fa fa-user"></i>
+                    </span>
+                    <span id="logged-in-info-full">
+                        <span class="loggedinusername">dpavlin@ffzg.hr</span>
+                        <span class="separator">|</span>
+                        
+                            <strong>
+                                
+                                    <span class="logged-in-branch-name">Knjižnica FFZG</span>
+                                    <span class="logged-in-branch-code content_hidden">FFZG</span>
+                                
+                            </strong>
+                        
+                    </span>
+                    <b class="caret"></b>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-right" role="menu" aria-labelledby="logged-in-menu">
+
+                    <li class="loggedin-menu-label">
+                        Logged in as:<br>
+                        <span class="loggedinusername">dpavlin@ffzg.hr</span>
+                    </li>
+                    <li class="loggedin-menu-label">
+                        
+                            
+                                Location: <br>
+                                <span class="logged-in-branch-name">Knjižnica FFZG</span>
+                                <span class="logged-in-branch-code content_hidden">FFZG</span>
+                            
+                        
+                    </li>
+
+                    <li role="separator" class="loggedin-menu-label divider"></li>
+                    
+                    <li>
+                        <a class="toplinks" href="/cgi-bin/koha/circ/selectbranchprinter.pl">Set library</a>
+                    </li>
+                    
+                    
+                    
+                        <li class="toplinks-myaccount">
+                            <a class="toplinks" href="/cgi-bin/koha/members/moremember.pl?borrowernumber=606">My account</a>
+                        </li>
+                        <li class="toplinks-mycheckouts">
+                            <a class="toplinks" href="/cgi-bin/koha/circ/circulation.pl?borrowernumber=606">My checkouts</a>
+                        </li>
+                    
+                    <li>
+                        <a id="logout" class="toplinks" href="/cgi-bin/koha/mainpage.pl?logout.x=1">Log out</a>
+                    </li>
+                </ul>
+            </li>
+            
+
+
+            <li>
+                <a class="toplinks" href="/cgi-bin/koha/help.pl" id="helper"><i class="fa fa-question-circle"></i> <span>Help</span></a>
+            </li>
+            
+        </ul>
+
+    
+    <div id="cartDetails">Your cart is empty.</div>
+
+</nav>
+
+
+<div class="gradient">
+<h1 id="logo"><a href="/cgi-bin/koha/mainpage.pl"></a></h1><!-- Begin Circulation Resident Search Box -->
+
+<div id="header_search" class="ui-tabs ui-widget ui-widget-content ui-corner-all">
+    
+    <div id="circ_search" class="residentsearch ui-tabs-panel ui-widget-content ui-corner-bottom" aria-labelledby="ui-id-1" role="tabpanel" aria-hidden="false">
+    <p class="tip">Enter patron card number or partial name:</p>
+    <form action="/cgi-bin/koha/circ/circulation.pl" id="patronsearch" method="post">
+    
+            <input id="findborrower" name="findborrower" size="40" class="head-searchbox focus" type="text" autocomplete="off">
+            
+            <input value="Submit" class="submit" type="submit">
+	
+    </form>
+	</div>
+	
+
+
+<div id="checkin_search" class="residentsearch ui-tabs-panel ui-widget-content ui-corner-bottom" aria-labelledby="ui-id-2" role="tabpanel" aria-hidden="true" style="display: none;">
+    <p class="tip">Scan a barcode to check in:</p>
+    <form method="post" action="/cgi-bin/koha/circ/returns.pl" autocomplete="off">
+        <input class="head-searchbox" name="barcode" id="ret_barcode" size="40" accesskey="r" type="text">
+        <input value="Submit" class="submit" type="submit">
+    </form>
+</div>
+<div id="renew_search" class="residentsearch ui-tabs-panel ui-widget-content ui-corner-bottom" aria-labelledby="ui-id-3" role="tabpanel" aria-hidden="true" style="display: none;">
+    <p class="tip">Scan a barcode to renew:</p>
+    <form method="post" action="/cgi-bin/koha/circ/renew.pl" autocomplete="off">
+        <input class="head-searchbox" name="barcode" id="ren_barcode" size="40" type="text">
+        <input value="Submit" class="submit" type="submit">
+    </form>
+</div>
+
+
+<div id="catalog_search" class="residentsearch ui-tabs-panel ui-widget-content ui-corner-bottom" aria-labelledby="ui-id-4" role="tabpanel" aria-hidden="true" style="display: none;">
+    <p class="tip">Enter search keywords:</p>
+    <form action="/cgi-bin/koha/catalogue/search.pl" method="get" id="cat-search-block">
+        
+        <input class="head-searchbox" type="text" name="q" id="search-form" size="40" accesskey="q">
+        <input type="submit" class="submit" value="Submit">
+    </form>
+</div>
+
+
+<ul class="ui-tabs-nav ui-helper-reset ui-helper-clearfix ui-widget-header ui-corner-all" role="tablist">
+    <li class="ui-state-default ui-corner-top ui-tabs-active ui-state-active" role="tab" tabindex="0" aria-controls="circ_search" aria-labelledby="ui-id-1" aria-selected="true" aria-expanded="true"><a class="keep_text ui-tabs-anchor" href="#circ_search" role="presentation" tabindex="-1" id="ui-id-1">Check out</a></li>
+    <li class="ui-state-default ui-corner-top" role="tab" tabindex="-1" aria-controls="checkin_search" aria-labelledby="ui-id-2" aria-selected="false" aria-expanded="false" style="display: list-item;"><a class="keep_text ui-tabs-anchor" href="#checkin_search" role="presentation" tabindex="-1" id="ui-id-2">Check in</a></li>
+    <li class="ui-state-default ui-corner-top" role="tab" tabindex="-1" aria-controls="renew_search" aria-labelledby="ui-id-3" aria-selected="false" aria-expanded="false" style="display: list-item;"><a class="keep_text ui-tabs-anchor" href="#renew_search" role="presentation" tabindex="-1" id="ui-id-3">Renew</a></li>
+    <li class="ui-state-default ui-corner-top" role="tab" tabindex="-1" aria-controls="catalog_search" aria-labelledby="ui-id-4" aria-selected="false" aria-expanded="false" style="display: list-item;"><a class="keep_text ui-tabs-anchor" href="#catalog_search" role="presentation" tabindex="-1" id="ui-id-4">Search the catalog</a></li>
+</ul>   
+
+</div><!-- /header_search -->
+</div><!-- /gradient -->
+<!-- End Circulation Resident Search Box -->
+
+
+<div id="breadcrumbs"><a href="/cgi-bin/koha/mainpage.pl">Home</a> › <a href="/cgi-bin/koha/circ/circulation-home.pl">Circulation</a> ›
+
+    <a href="/cgi-bin/koha/circ/circulation.pl">Checkouts</a> ›         Dobrica  Pavlinušić (200000000042)
+
+</div>
+
+<div id="doc3" class="yui-t2">
+
+   <div id="bd">
+	<div id="yui-main">
+	<div class="yui-b">
+
+
+
+
+
+
+
+
+
+
+<div id="toolbar" class="btn-toolbar">
+    
+        
+            <a id="editpatron" class="btn btn-default" href="/cgi-bin/koha/members/memberentry.pl?op=modify&amp;destination=circ&amp;borrowernumber=606&amp;categorycode=KNJIZ">
+        
+        <i class="fa fa-pencil"></i> Edit</a>
+    
+
+    
+        
+        
+            <a id="changepassword" class="btn btn-default" href="/cgi-bin/koha/members/member-password.pl?member=606"><i class="fa fa-lock"></i> Change password</a>
+        
+        <a id="duplicate" class="btn btn-default" href="/cgi-bin/koha/members/memberentry.pl?op=duplicate&amp;borrowernumber=606&amp;categorycode=KNJIZ"><i class="fa fa-copy"></i> Duplicate</a>
+    
+
+    
+    <div class="btn-group">
+        <button class="btn btn-default dropdown-toggle" data-toggle="dropdown"><i class="fa fa-print"></i> Print <span class="caret"></span></button>
+            <ul class="dropdown-menu">
+                <li><a id="printsummary" href="#">Print summary</a></li>
+                <li><a id="printslip" href="#">Print slip</a></li>
+                <li><a id="printquickslip" href="#">Print quick slip</a></li>
+                
+            </ul>
+    </div>
+    
+
+    
+        <a id="searchtohold" class="btn btn-default" href="#"><i class="fa fa-search"></i> Search to hold</a>
+    
+
+    <a id="addnewmessageLabel" href="#add_message_form" data-toggle="modal" class="btn btn-default"><i class="fa fa-comment-o"></i> Add message</a>
+
+         <div class="btn-group">
+        <button class="btn btn-default dropdown-toggle" data-toggle="dropdown">More <span class="caret"></span></button>
+            <ul class="dropdown-menu dropdown-menu-right">
+                
+                    <li><a id="renewpatron" href="/cgi-bin/koha/members/setstatus.pl?borrowernumber=606&amp;destination=circ&amp;reregistration=y" data-original-title="" title="">Renew patron</a></li>
+                
+                
+                    <li><a id="patronflags" href="/cgi-bin/koha/members/member-flags.pl?member=606" data-original-title="" title="">Set permissions</a></li>
+                
+
+                
+                    <li><a href="/cgi-bin/koha/members/discharge.pl?borrowernumber=606">Discharge</a></li>
+                
+
+                
+
+                
+                    <li><a id="deletepatron" href="#" data-original-title="" title="">Delete</a></li>
+                
+                
+                    
+                        <li class="disabled"><a data-toggle="tooltip" data-placement="left" title="" id="updatechild" href="#" data-original-title="Patron is an adult">Update child to adult patron</a></li>
+                    
+                
+                
+                    
+                        <li><a id="exportcheckins" href="#">Export today's checked in barcodes</a></li>
+                    
+                
+            </ul>
+    </div>
+</div>
+
+<!-- Modal -->
+<div id="add_message_form" class="modal" tabindex="-1" role="dialog" aria-labelledby="addnewmessageLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="/cgi-bin/koha/circ/add_message.pl" id="message_form" name="message_f">
+                <div class="modal-header">
+                    <h3>Leave a message</h3>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="message_type">Add a message for:</label>
+                        <select name="message_type" id="message_type">
+                            <option value="L">Staff - Internal note</option>
+                            <option value="B">OPAC - Dobrica Pavlinušić</option>
+                        </select>
+                    </div>
+                    
+                    
+                        <div class="form-group">
+                            <label for="select_patron_messages">Predefined notes: </label>
+                            <select name="type" id="select_patron_messages">
+                                <option value="">Select note</option>
+                                
+                                    <option value="Address Notes">Address Notes</option>
+                                
+                            </select>
+                        </div>
+                    
+                    <div class="form-group">
+                        <textarea rows="3" class="modal-textarea" name="borrower_message" id="borrower_message"></textarea>
+                    </div>
+                    <input type="hidden" name="borrowernumber" value="606">
+                    <input type="hidden" name="batch" value="">
+                    <input type="hidden" name="branchcode" value="FFZG">
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-default approve" type="submit"><i class="fa fa-check"></i> Save</button>
+                    <button class="btn btn-default deny cancel" href="#" data-dismiss="modal" aria-hidden="true"><i class="fa fa-times"></i> Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
+
+<!--  INITIAL BLOC : PARAMETERS & BORROWER INFO -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="yui-g">
+
+<div id="circ_needsconfirmation" class="dialog alert audio-alert-action">
+
+  <h3>Please confirm checkout</h3>
+
+
+<ul>
+
+
+
+
+
+
+
+
+
+    <li>Item <i>A commentary on Propertius, Book 3 /</i> (1302079605) is currently checked out to this patron.  Renew?</li>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</ul>
+
+
+<form method="post" action="/cgi-bin/koha/circ/circulation.pl" autocomplete="off">
+    <input type="hidden" name="restoreduedatespec">
+
+
+
+
+
+
+
+
+
+    <input type="hidden" name="barcode" value="1302079605">
+    <input type="hidden" name="borrowernumber" value="606">
+    <input type="hidden" name="issueconfirmed" value="1">
+    <input type="hidden" name="override_high_holds" value="">
+    
+    
+    <input type="hidden" name="duedatespec" value="">
+    
+    <input type="hidden" name="stickyduedate" value="">
+    <input type="hidden" name="branch" value="FFZG">
+    
+    <button type="submit" class="approve" accesskey="y"><i class="fa fa-check"></i> Yes, renew (Y)</button>
+    
+    <input type="hidden" name="onsite_checkout" value="">
+    <input type="hidden" name="auto_renew" value="">
+</form>
+
+
+
+
+
+
+<form method="get" action="/cgi-bin/koha/circ/circulation.pl">
+    
+    <input type="hidden" name="borrowernumber" value="606">
+    <input type="hidden" name="duedatespec" value="">
+    <input type="hidden" name="restoreduedatespec">
+    <input type="hidden" name="stickyduedate" value="">
+    
+        
+        <button type="submit" class="deny" accesskey="n"><i class="fa fa-times"></i> No, don't renew (N)</button>
+        
+    
+</form>
+
+
+</div></div>
+ <!-- NEEDSCONFIRMATION -->
+
+        
+  
+ <!-- /impossible -->
+
+<span class="audio-alert-success"></span>
+
+
+
+
+
+
+
+<!-- BARCODE ENTRY -->
+
+
+<div class="yui-g">
+
+
+
+
+<div class="yui-u first">
+
+<form method="post" action="/cgi-bin/koha/circ/circulation.pl" id="mainform" name="mainform" autocomplete="off">
+    <input type="hidden" name="restoreduedatespec">
+
+    <fieldset id="circ_circulation_issue">
+
+    
+
+    
+
+    <label class="circ_barcode" for="barcode">Checking out to         Dobrica  Pavlinušić (200000000042)</label>
+
+        
+            <div class="hint">Enter item barcode:</div>
+        
+
+    
+        <input type="text" name="barcode" id="barcode" class="barcode focus" size="14" disabled="disabled">
+    
+    <button type="submit" class="btn btn-default">Check out</button>
+
+    <div id="show-checkout-settings">
+        <a href="#"><i class="fa fa-caret-right checkout-settings-icon"></i> Checkout settings</a>
+    </div>
+
+    <div class="checkout-settings" style="display: none;">
+
+        
+            
+                <div id="specify-due-date" class="checkout-setting">
+                    <div class="hint">Specify due date (YYYY-MM-DD)
+: </div>
+                    
+                        <input type="text" size="13" id="duedatespec" name="duedatespec" value="" class="hasDatepicker">
+                    
+                    <label for="stickyduedate"> Remember for session:</label>
+                    
+                        <input type="checkbox" id="stickyduedate" onclick="this.form.barcode.focus();" name="stickyduedate">
+                    
+                    <button class="btn btn-default btn-sm action" id="cleardate" name="cleardate" onclick="this.checked = false; this.form.duedatespec.value = ''; this.form.stickyduedate.checked = false; this.form.barcode.focus(); return false;">Clear</button>
+                </div>
+            
+        
+
+        
+            <div id="set-automatic-renewal" class="checkout-setting">
+                
+                    <input type="checkbox" name="auto_renew" id="auto_renew" value="auto_renew" disabled="disabled">
+                
+
+                <label for="auto_renew">Automatic renewal</label>
+            </div>
+            
+        
+
+        
+            <div id="onsite_checkout-select" class="checkout-setting">
+                
+                    <input type="checkbox" id="onsite_checkout" name="onsite_checkout" class="circ_setting"> <label for="onsite_checkout">On-site checkout</label>
+                
+            </div>
+        
+
+    </div> <!-- /.checkout-settings -->
+
+          <input type="hidden" name="borrowernumber" id="borrowernumber" value="606">
+          <input type="hidden" name="branch" value="FFZG">
+          <input type="hidden" name="print" value="maybe">
+          <input type="hidden" name="debt_confirmed" value="0">
+                
+</fieldset>
+
+</form></div>
+
+<!-- /unless noissues -->
+
+
+    <div class="yui-u">
+
+
+        
+            <div id="circmessages" class="circmessage attention">
+                <h3>Attention:</h3>
+        
+
+		<ul>
+
+                   
+
+			
+
+			
+
+			
+
+            
+
+            
+
+            
+
+                
+
+            
+
+            
+
+
+            
+
+			</ul>
+        </div>
+
+            
+
+	
+
+    <div id="messages" class="circmessage">
+        <h4>Messages:</h4>
+        <ul>
+            
+        </ul>
+        <a id="addnewmessageLabel" href="#add_message_form" class="btn btn-link btn-sm" data-toggle="modal"><i class="fa fa-plus"></i> Add a new message</a>
+    </div>
+
+</div>
+</div>
+
+<div class="yui-g"><div id="patronlists" class="toptabs ui-tabs ui-widget ui-widget-content ui-corner-all">
+
+<ul class="ui-tabs-nav ui-helper-reset ui-helper-clearfix ui-widget-header ui-corner-all" role="tablist">
+    <li class="ui-state-default ui-corner-top ui-tabs-active ui-state-active" role="tab" tabindex="0" aria-controls="checkouts" aria-labelledby="ui-id-5" aria-selected="true" aria-expanded="true">
+        
+            <a href="#checkouts" class="ui-tabs-anchor" role="presentation" tabindex="-1" id="ui-id-5">1 Checkout(s)</a>
+        
+    </li>
+
+    
+
+    <li class="ui-state-default ui-corner-top" role="tab" tabindex="-1" aria-controls="reserves" aria-labelledby="holds-tab" aria-selected="false" aria-expanded="false">
+        
+            <a href="#reserves" id="holds-tab" class="ui-tabs-anchor" role="presentation" tabindex="-1">0 Holds</a>
+        
+    </li>
+
+    
+
+    <li class="ui-state-default ui-corner-top" role="tab" tabindex="-1" aria-controls="reldebarments" aria-labelledby="debarments-tab-link" aria-selected="false" aria-expanded="false"><a id="debarments-tab-link" href="#reldebarments" class="ui-tabs-anchor" role="presentation" tabindex="-1"> Restrictions</a></li>
+
+    
+    
+    
+
+</ul>
+
+<!-- SUMMARY : TODAY & PREVIOUS ISSUES -->
+
+
+<div id="checkouts" aria-labelledby="ui-id-5" class="ui-tabs-panel ui-widget-content ui-corner-bottom" role="tabpanel" aria-hidden="false">
+    
+        <div id="issues-table-loading-message">
+            <p>
+                <a id="issues-table-load-now-button" href="#" class="btn btn-default"><i class="fa fa-book"></i> Show checkouts</a>
+            </p>
+        </div>
+        <form name="issues" action="/cgi-bin/koha/tools/export.pl" method="post" class="checkboxed">
+            <table id="issues-table" style="width: 100% !important; display: none;">
+                <thead>
+                    <tr>
+                        <th scope="col">&nbsp;</th>
+                        <th scope="col">&nbsp;</th>
+                        <th scope="col">Due date</th>
+                        <th scope="col">Due date</th>
+                        <th scope="col">Title</th>
+                        <th scope="col">Item type</th>
+                        <th scope="col">Collection</th>
+                        <th scope="col">Location</th>
+                        <th scope="col">Home library</th>
+                        <th scope="col">&nbsp;</th>
+                        <th scope="col">Checked out on</th>
+                        <th scope="col">Checked out from</th>
+                        <th scope="col">Call no</th>
+                        <th scope="col">Charge</th>
+                        <th scope="col">Fine</th>
+                        <th scope="col">Price</th>
+                        <th scope="col">Renew <p class="column-tool"><a href="#" id="CheckAllRenewals">select all</a> | <a href="#" id="UncheckAllRenewals">none</a></p></th>
+                        <th scope="col">Check in <p class="column-tool"><a href="#" id="CheckAllCheckins">select all</a> | <a href="#" id="UncheckAllCheckins">none</a></p></th>
+                        <th scope="col">Export <p class="column-tool"><a href="#" id="CheckAllExports">select all</a> | <a href="#" id="UncheckAllExports">none</a></p></th>
+                    </tr>
+                </thead>
+                <tfoot>
+	<tr>
+        <td colspan="13" style="text-align: right; font-weight:bold;">Totals:</td>
+        <td id="totaldue" style="text-align: right;">0.00</td>
+        <td id="totalfine" style="text-align: right;">0</td>
+        <td id="totalprice" style="text-align: right;"></td>
+                <td colspan="3"><div class="date-select">
+            <p><label for="newduedate">Renewal due date:</label> <input type="text" size="12" id="newduedate" name="newduedate" value="" class="hasDatepicker">
+</p>
+            <p><label for="exemptfine">Forgive fines on return: <input type="checkbox" id="exemptfine" name="exemptfine" value="1"></label></p></div>
+		</td>
+	</tr>
+</tfoot>
+
+            </table>
+
+            <label for="issues-table-load-immediately">Always show checkouts immediately</label>
+            <input id="issues-table-load-immediately" type="checkbox">
+
+            <div id="issues-table-actions" style="display: none;">
+                <fieldset class="action">
+                    
+                        
+                            <label for="override_limit">Override renewal limit:</label>
+                            <input type="checkbox" name="override_limit" id="override_limit" value="1">
+                        
+                    
+                    
+                        <button class="btn btn-default" id="RenewCheckinChecked"><i class="fa fa-check"></i> Renew or check in selected items</button>
+                        <button class="btn btn-default" id="RenewAll"><i class="fa fa-book"></i> Renew all</button>
+                    
+                </fieldset>
+
+                
+            </div>
+        </form>
+    
+</div>
+
+
+
+
+
+
+
+<div id="reldebarments" aria-labelledby="debarments-tab-link" class="ui-tabs-panel ui-widget-content ui-corner-bottom" role="tabpanel" aria-hidden="true" style="display: none;">
+    
+        <p>Patron is currently unrestricted.</p>
+    
+    
+        <p><a href="#" id="add_manual_restriction"><i class="fa fa-plus"></i> Add manual restriction</a></p>
+        <form method="post" action="/cgi-bin/koha/members/mod_debarment.pl" class="clearfix">
+            <input type="hidden" name="borrowernumber" value="606">
+            <input type="hidden" name="action" value="add">
+            <fieldset class="rows" id="manual_restriction_form" style="display: none;">
+                <legend>Add manual restriction</legend>
+                <ol>
+                    <li><label for="rcomment">Comment:</label> <input type="text" id="rcomment" name="comment"></li>
+                    <li><label for="rexpiration">Expiration:</label> <input name="expiration" id="rexpiration" size="10" value="" class="datepicker hasDatepicker" type="text">
+                        <a href="#" class="clear-date" id="clear-date-rexpiration">Clear date</a></li>
+                </ol>
+            <fieldset class="action"><input type="submit" value="Add restriction"> <a href="#" class="cancel" id="cancel_manual_restriction">Cancel</a></fieldset>
+            </fieldset>
+        </form>
+    
+</div>
+
+
+<div id="reserves" aria-labelledby="holds-tab" class="ui-tabs-panel ui-widget-content ui-corner-bottom" role="tabpanel" aria-hidden="true" style="display: none;">
+
+	<p>Patron has nothing on hold.</p>
+
+</div> <!-- reservesloop -->
+
+
+
+
+</div></div>
+
+
+</div>
+</div>
+
+    
+        <div class="yui-b">
+            
+
+
+<div class="patroninfo"><h5>        Dobrica  Pavlinušić (200000000042)</h5>
+
+<input type="hidden" id="hiddenborrowernumber" value="606">
+<input type="hidden" id="hiddenborrowername" value="Pavlinušić Dobrica">
+<input type="hidden" id="hiddenborrowercard" value="200000000042">
+
+
+
+<ul class="patronbriefinfo">
+    
+        
+                
+
+
+            
+
+        <li class="patronphone">
+        
+            
+                <a href="tel:091/5378160">091/5378160</a>
+            
+        </li>
+        
+            <li class="email"> <a href="mailto:dpavlin+koha@ffzg.hr" title="dpavlin+koha@ffzg.hr">dpavlin+koha@ffzg.hr</a></li>
+        
+
+        
+            <li><span class="empty" id="noaddressstored">No address stored.</span></li>
+        
+        
+            <li><span class="empty" id="nocitystored">No city stored.</span></li>
+        
+        
+        
+    
+
+    
+        
+    
+        
+    
+        
+    
+    <li class="patroncategory">Category: Knjiznicari (KNJIZ)</li>
+    <li class="patronlibrary">Home library: Knjižnica FFZG</li>
+    <li class="patronborrowernumber">Borrowernumber: 606</li>
+    <li><span class="patronupdatedon">Updated on 2026-07-07 23:06</span></li>
+  </ul></div>
+<div id="menu">
+<ul>
+    
+        <li class="active"><a href="/cgi-bin/koha/circ/circulation.pl?borrowernumber=606">Check out</a></li>
+        
+    
+    
+        <li><a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=606">Details</a></li>
+    
+    
+        <li><a href="/cgi-bin/koha/members/pay.pl?borrowernumber=606">Accounting</a></li>
+    
+    
+        
+    
+    
+        
+            <li><a href="/cgi-bin/koha/members/readingrec.pl?borrowernumber=606">Circulation history</a></li>
+        
+    
+    
+        
+            <li><a href="/cgi-bin/koha/members/holdshistory.pl?borrowernumber=606">Holds history</a></li>
+        
+    
+    
+        <li><a href="/cgi-bin/koha/tools/viewlog.pl?do_it=1&amp;modules=MEMBERS&amp;modules=CIRCULATION&amp;object=606&amp;src=circ">Modification log</a></li>
+    
+    
+    <li><a href="/cgi-bin/koha/members/notices.pl?borrowernumber=606">Notices</a></li>
+    
+    
+        <li><a href="/cgi-bin/koha/members/statistics.pl?borrowernumber=606">Statistics</a></li>
+    
+    
+        
+    
+
+    
+        <li><a href="/cgi-bin/koha/members/purchase-suggestions.pl?borrowernumber=606">Purchase suggestions</a></li>
+    
+    
+        <li><a href="/cgi-bin/koha/members/discharge.pl?borrowernumber=606">Discharges</a></li>
+    
+    
+    
+</ul></div>
+
+<!-- Modal -->
+<div class="modal" id="patronImageEdit" tabindex="-1" role="dialog" aria-labelledby="patronImageEditLabel">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="closebtn" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span></button>
+                <h4 class="modal-title" id="patronImageEditLabel">Modal title</h4>
+            </div>
+            <div class="modal-body">
+                <img src="/intranet-tmpl/prog/img/spinner-small.gif" alt="">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+        </div>
+    
+
+</div>
+<!-- Modal -->
+<div id="barcodeSubmittedModal" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="barcodeSubmittedModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+    <div class="modal-content">
+    <div class="modal-header">
+        <h3 id="barcodeSubmittedModalLabel">Barcode submitted</h3>
+    </div>
+
+    <div class="modal-body">
+        <p>You have already submitted a barcode, please wait for the checkout to process...</p>
+    </div>
+    </div>
+    </div>
+</div>
+
+
+
+
+
+
+        </div>
+
+    
+        <div id="changelanguage" class="navbar navbar-default navbar-fixed-bottom">
+            <div class="container-fluid">
+        <ul id="i18nMenu" class="nav navbar-nav">
+        
+
+            
+            
+            
+                
+                    <li class="navbar-text">
+                        
+                            <span class="currentlanguage">English</span>
+                        
+                    </li>
+                
+        
+            
+            
+
+        
+
+            
+            
+            
+                
+                    <li><a href="/cgi-bin/koha/changelanguage.pl?language=hr-HR">
+                        
+                            Hrvatski
+                        
+                    </a></li>
+                
+        
+            
+            
+
+        
+
+            
+
+        
+
+            
+
+        
+
+            
+
+        
+
+            
+
+        
+
+            
+
+        
+        </ul>
+        </div>
+        </div>
+    
+
+    <span id="audio-alert"></span>
+    
+        
+
+
+
+
+    <script type="text/javascript">
+       if (self === top) {
+           var antiClickjack = document.getElementById("antiClickjack");
+           antiClickjack.parentNode.removeChild(antiClickjack);
+       } else {
+           top.location = self.location;
+       }
+    </script>
+
+
+<script src="/intranet-tmpl/lib/jquery/jquery-2.2.3.min_18.1200031.js"></script>
+<script src="/intranet-tmpl/lib/jquery/jquery-migrate-1.3.0.min_18.1200031.js"></script>
+<script src="/intranet-tmpl/lib/jquery/jquery-ui-1.11.4.min_18.1200031.js"></script>
+<script src="/intranet-tmpl/lib/shortcut/shortcut_18.1200031.js"></script>
+<script src="/intranet-tmpl/lib/jquery/plugins/jquery.cookie.min_18.1200031.js"></script>
+<script src="/intranet-tmpl/lib/jquery/plugins/jquery.highlight-3_18.1200031.js"></script>
+<script src="/intranet-tmpl/lib/bootstrap/bootstrap.min_18.1200031.js"></script>
+<script src="/intranet-tmpl/lib/jquery/plugins/jquery.validate.min_18.1200031.js"></script>
+<!-- koha core js -->
+<script src="/intranet-tmpl/prog/js/staff-global_18.1200031.js"></script>
+<script src="/intranet-tmpl/prog/js/commons_18.1200031.js"></script>
+
+
+<script type="text/javascript">
+//<![CDATA[
+$(document).ready(function(){
+    jQuery.extend(jQuery.validator.messages, {
+        required: _("This field is required."),
+        remote: _("Please fix this field."),
+        email: _("Please enter a valid email address."),
+        url: _("Please enter a valid URL."),
+        date: _("Please enter a valid date."),
+        dateISO: _("Please enter a valid date (ISO)."),
+        number: _("Please enter a valid number."),
+        digits: _("Please enter only digits."),
+        equalTo: _("Please enter the same value again."),
+        maxlength: $.validator.format(_("Please enter no more than {0} characters.")),
+        minlength: $.validator.format(_("Please enter at least {0} characters.")),
+        rangelength: $.validator.format(_("Please enter a value between {0} and {1} characters long.")),
+        range: $.validator.format(_("Please enter a value between {0} and {1}.")),
+        max: $.validator.format(_("Please enter a value less than or equal to {0}.")),
+        min: $.validator.format(_("Please enter a value greater than or equal to {0}."))
+    });
+});
+//]]>
+</script>
+
+
+
+
+<script type="text/javascript">
+    //<![CDATA[
+        var MSG_BASKET_EMPTY = _("Your cart is currently empty");
+        var MSG_RECORD_IN_BASKET = _("This item is already in your cart");
+        var MSG_RECORD_ADDED = _("This item has been added to your cart");
+        var MSG_NRECORDS_ADDED = _("%s item(s) added to your cart");
+        var MSG_NRECORDS_IN_BASKET = _("%s already in your cart");
+        var MSG_NO_RECORD_SELECTED = _("No item was selected");
+        var MSG_NO_RECORD_ADDED = _("No item was added to your cart (already in your cart)!");
+        var MSG_CONFIRM_DEL_BASKET = _("Are you sure you want to empty your cart?");
+        var MSG_CONFIRM_DEL_RECORDS = _("Are you sure you want to remove the selected items?");
+        var MSG_IN_YOUR_CART = _("Items in your cart: %s");
+        var MSG_NON_RESERVES_SELECTED = _("One or more selected items cannot be reserved.");
+        var MSG_ITEM_NOT_IN_CART = _("Add to cart");
+        var MSG_ITEM_IN_CART = _("In your cart");
+        var MSG_RECORD_REMOVED = _("The item has been removed from your cart");
+    //]]>
+    </script>
+
+    <script src="/intranet-tmpl/prog/js/basket_18.1200031.js"></script>
+
+
+
+
+
+
+
+    
+
+
+        
+    <script type="text/javascript">
+//<![CDATA[
+    var CIRCULATION_RETURNED = _("Checked in");
+    var CIRCULATION_NOT_RETURNED = _("Unable to check in");
+    var NOT_RENEWABLE_OVERDUE = _("Not allowed: overdue");
+    var NOT_RENEWABLE_RESTRICTION = _("Not allowed: patron restricted");
+    var CIRCULATION_RENEWED_DUE = _("Renewed, due:");
+    var CIRCULATION_RENEW_FAILED = _("Renew failed:");
+    var NOT_CHECKED_OUT = _("not checked out");
+    var TOO_MANY_RENEWALS = _("too many renewals");
+    var ON_RESERVE = _("on hold");
+    var REASON_UNKNOWN = _("reason unknown");
+    var TODAYS_CHECKOUTS = _("Today's checkouts");
+    var PREVIOUS_CHECKOUTS = _("Previous checkouts");
+    var BY = _("by _AUTHOR_");
+    var ON_HOLD = _("On hold");
+    var NOT_RENEWABLE = _("Not renewable");
+    var NOT_RENEWABLE_TOO_SOON = _("No renewal before %s");
+    var NOT_RENEWABLE_AUTO_TOO_SOON = _("Scheduled for automatic renewal");
+    var NOT_RENEWABLE_AUTO_TOO_LATE = _("Can no longer be auto-renewed - number of checkout days exceeded");
+    var NOT_RENEWABLE_AUTO_TOO_MUCH_OWEING = _("Automatic renewal failed, patron has unpaid fines");
+    var NOT_RENEWABLE_AUTO_ACCOUNT_EXPIRED = _("Automatic renewal failed, account expired");
+    var NOT_RENEWABLE_AUTO_RENEW = _("Scheduled for automatic renewal");
+    var NOT_RENEWABLE_DENIED = _("Renewal denied by syspref");
+    var RENEWALS_REMAINING = _("%s of %s renewals remaining");
+    var HOLD_IS_SUSPENDED = _("Hold is <strong>suspended</strong>");
+    var UNTIL = _("until %s");
+    var NEXT_AVAILABLE_ITYPE = _("Next available %s item");
+    var ITEM_IS_WAITING = _("Item is <strong>waiting</strong>");
+    var ITEM_IS_WAITING_HERE = _("Item is <strong>waiting here</strong>");
+    var AT = _("at %s");
+    var ITEM_IS_IN_TRANSIT = _("Item is <strong>in transit</strong> from %s since %s");
+    var FROM = _("from");
+    var NOT_TRANSFERRED_YET = _("Item hasn't been transferred yet from %s");
+    var NO = _("No");
+    var YES = _("Yes");
+    var INHOUSE_USE = _("On-site checkout");
+    var CANCEL = _("Cancel");
+    var RESUME = _("Resume");
+    var SUSPEND = _("Suspend");
+    var SUSPEND_UNTIL = _("Suspend until:");
+    var SUSPEND_HOLD_ON = _("Suspend hold on");
+    var CLEAR_DATE_TO_SUSPEND_INDEFINITELY = _("Clear date to suspend indefinitely");
+    var SUSPEND_HOLD_ERROR_DATE = _("Unable to suspend hold, invalid date");
+    var SUSPEND_HOLD_ERROR_NOT_FOUND = _("Unable to suspend hold, hold not found");
+    var RESUME_HOLD_ERROR_NOT_FOUND = _("Unable to resume, hold not found");
+    var CURRENT = _(" (current) ");
+    var MSG_NO_ITEMTYPE = _("No itemtype");
+    var MSG_CHECKOUTS_BY_ITEMTYPE = _("Number of checkouts by item type");
+//]]>
+</script>
+
+    
+<script>
+
+var debug    = "";
+var dformat  = "iso";
+var sentmsg = 0;
+if (debug > 1) {alert("dateformat: " + dformat + "\ndebug is on (level " + debug + ")");}
+var MSG_PLEASE_ENTER_A_VALID_DATE = (_("Please enter a valid date (should match %s)."));
+
+function is_valid_date(date) {
+    // An empty string is considered as a valid date for convenient reasons.
+    if ( date === '' ) return 1;
+
+    var dateformat = dateformat_str = 'iso';
+    if ( dateformat == 'us' ) {
+        if ( date.search(/^\d{2}\/\d{2}\/\d{4}($|\s)/) == -1 ) return 0;
+        dateformat = 'mm/dd/yy';
+    } else if ( dateformat == 'metric' ) {
+        if ( date.search(/^\d{2}\/\d{2}\/\d{4}($|\s)/) == -1 ) return 0;
+        dateformat = 'dd/mm/yy';
+    } else if (dateformat == 'iso' ) {
+        if ( date.search(/^\d{4}-\d{2}-\d{2}($|\s)/) == -1 ) return 0;
+        dateformat = 'yy-mm-dd';
+    } else if ( dateformat == 'dmydot' ) {
+        if ( date.search(/^\d{2}\.\d{2}\.\d{4}($|\s)/) == -1 ) return 0;
+        dateformat = 'dd.mm.yy';
+    }
+    try {
+        $.datepicker.parseDate(dateformat, date);
+    } catch (e) {
+        return 0;
+    };
+    return 1;
+}
+
+function get_dateformat_str(dateformat) {
+    var dateformat_str;
+    if ( dateformat == 'us' ) {
+        dateformat_str = 'mm/dd/yyyy';
+    } else if ( dateformat == 'metric' ) {
+        dateformat_str = 'dd/mm/yyyy';
+    } else if (dateformat == 'iso' ) {
+        dateformat_str = 'yyyy-mm-dd';
+    } else if ( dateformat == 'dmydot' ) {
+        dateformat_str = 'dd.mm.yyyy';
+    }
+    return dateformat_str;
+}
+
+function validate_date (dateText, inst) {
+    if ( !is_valid_date(dateText) ) {
+        var dateformat_str = get_dateformat_str( 'iso' );
+        alert(MSG_PLEASE_ENTER_A_VALID_DATE.format(dateformat_str));
+        $('#'+inst.id).val('');
+    }
+}
+
+function Date_from_syspref(dstring) {
+        var dateX = dstring.split(/[-/.]/);
+        if (debug > 1 && sentmsg < 1) {sentmsg++; alert("Date_from_syspref(" + dstring + ") splits to:\n" + dateX.join("\n"));}
+        if (dformat === "iso") {
+                return new Date(dateX[0], (dateX[1] - 1), dateX[2]);  // YYYY-MM-DD to (YYYY,m(0-11),d)
+        } else if (dformat === "us") {
+                return new Date(dateX[2], (dateX[0] - 1), dateX[1]);  // MM/DD/YYYY to (YYYY,m(0-11),d)
+        } else if (dformat === "metric") {
+                return new Date(dateX[2], (dateX[1] - 1), dateX[0]);  // DD/MM/YYYY to (YYYY,m(0-11),d)
+        } else if (dformat === "dmydot") {
+                return new Date(dateX[2], (dateX[1] - 1), dateX[0]);  // DD.MM.YYYY to (YYYY,m(0-11),d)
+        } else {
+                if (debug > 0) {alert("KOHA ERROR - Unrecognized date format: " +dformat);}
+                return 0;
+        }
+}
+
+function DateTime_from_syspref(date_time) {
+        var parts = date_time.split(" ");
+        var date = parts[0];
+        var time = parts[1];
+        parts = time.split(":");
+        var hour = parts[0];
+        var minute = parts[1];
+
+        if ( hour < 0 || hour > 23 ) {
+            return 0;
+        }
+        if ( minute < 0 || minute > 59 ) {
+            return 0;
+        }
+
+        var datetime = Date_from_syspref( date );
+
+        if ( isNaN( datetime.getTime() ) ) {
+            return 0;
+        }
+
+        datetime.setHours( hour );
+        datetime.setMinutes( minute );
+
+        return datetime;
+}
+
+
+/* Instead of including multiple localization files as you would normally see with
+   jQueryUI we expose the localization strings in the default configuration */
+jQuery(function($){
+    $.datepicker.regional[''] = {
+        closeText: _("Done"),
+        prevText: _("Prev"),
+        nextText: _("Next"),
+        currentText: _("Today"),
+        monthNames: [_("January"),_("February"),_("March"),_("April"),_("May"),_("June"),
+        _("July"),_("August"),_("September"),_("October"),_("November"),_("December")],
+        monthNamesShort: [_("Jan"), _("Feb"), _("Mar"), _("Apr"), _("May"), _("Jun"),
+        _("Jul"), _("Aug"), _("Sep"), _("Oct"), _("Nov"), _("Dec")],
+        dayNames: [_("Sunday"), _("Monday"), _("Tuesday"), _("Wednesday"), _("Thursday"), _("Friday"), _("Saturday")],
+        dayNamesShort: [_("Sun"), _("Mon"), _("Tue"), _("Wed"), _("Thu"), _("Fri"), _("Sat")],
+        dayNamesMin: [_("Su"),_("Mo"),_("Tu"),_("We"),_("Th"),_("Fr"),_("Sa")],
+        weekHeader: _("Wk"),
+        dateFormat: "yy-mm-dd",
+        firstDay: '1',
+        isRTL: false,
+        showMonthAfterYear: false,
+        yearSuffix: ''};
+    $.datepicker.setDefaults($.datepicker.regional['']);
+});
+
+/*  jQuery Validator plugin custom method
+    This allows you to check that a given date falls after another.
+    It is required that a message be defined.
+
+   Syntax:
+       $("#form_id").validate({
+        rules: {
+            input_name_of_later_date_field: {
+                is_date_after: "#input_id_of_earlier_date_field"
+            },
+        },
+        messages: {
+            input_name_of_later_date_field: {
+                is_date_after: _("Validation error to be shown, i.e. End date must come after start date")
+            }
+        }
+    });
+*/
+
+jQuery.validator.addMethod("is_date_after",
+function(value, element, params) {
+    var from = Date_from_syspref( $(params).val() );
+    var to = Date_from_syspref(value);
+    return to > from;
+});
+
+jQuery.validator.addMethod("date_on_or_after",
+function(value, element, params) {
+    var from = Date_from_syspref( $(params).val() );
+    var to = Date_from_syspref(value);
+    return to >= from;
+});
+
+$(document).ready(function(){
+
+$.datepicker.setDefaults({
+        showOn: "focus",
+        changeMonth: true,
+        changeYear: true,
+        showButtonPanel: true,
+        showOtherMonths: true,
+        selectOtherMonths: true,
+        yearRange: "c-100:c+10"
+    });
+
+$("#dateofbirth").datepicker({
+        yearRange: "c-100:c"
+    });
+
+    $( ".datepicker" ).datepicker({
+        onClose: function(dateText, inst) {
+            validate_date(dateText, inst);
+        },
+    }).on("change", function(e, value) {
+        if ( ! is_valid_date( $(this).val() ) ) {$(this).val("");}
+    });
+    // http://jqueryui.com/demos/datepicker/#date-range
+    var dates = $( ".datepickerfrom, .datepickerto" ).datepicker({
+        changeMonth: true,
+        numberOfMonths: 1,
+        onSelect: function( selectedDate ) {
+            var option = this.id == "from" ? "minDate" : "maxDate",
+                instance = $( this ).data( "datepicker" );
+                date = $.datepicker.parseDate(
+                    instance.settings.dateFormat ||
+                    $.datepicker._defaults.dateFormat,
+                    selectedDate, instance.settings );
+            dates.not( this ).datepicker( "option", option, date );
+        },
+        onClose: function(dateText, inst) {
+            validate_date(dateText, inst);
+        },
+    }).on("change", function(e, value) {
+        if ( ! is_valid_date( $(this).val() ) ) {$(this).val("");}
+    });
+});
+</script>
+
+    
+
+
+<script type="text/javascript">
+    
+    
+        var default_value = {
+            thousands_sep: ',',
+            decimal_point: '.',
+            decimal_digits: 2
+        };
+
+    
+    Number.prototype.format_price = function( value, params ) {
+        params = params == undefined ? {} : params;
+        var thousands_sep = params.thousands_sep == undefined ? default_value.thousands_sep : params.thousands_sep,
+            decimal_point = params.decimal_point == undefined ? default_value.decimal_point : params.decimal_point,
+            //symbol = params.symbol == undefined ? '$' : params.symbol, // Not implemented yet
+            decimal_digits = params.decimal_digits == undefined ? default_value.decimal_digits : params.decimal_digits;
+
+            var re = '\\d(?=(\\d{' + 3 + '})+' + '\\D' + ')', value = this.toFixed(decimal_digits);
+            return value.replace('.', decimal_point).replace(new RegExp(re, 'g'), '$&' + thousands_sep);
+    }
+</script>
+
+<script src="/intranet-tmpl/lib/jquery/plugins/jquery.dataTables.min_18.1200031.js"></script>
+<script src="/intranet-tmpl/lib/jquery/plugins/dataTables.buttons.min_18.1200031.js"></script>
+<script src="/intranet-tmpl/lib/jquery/plugins/buttons.colVis.min_18.1200031.js"></script>
+<script src="/intranet-tmpl/lib/jquery/plugins/jszip.min_18.1200031.js"></script>
+<script src="/intranet-tmpl/lib/jquery/plugins/buttons.print.min_18.1200031.js"></script>
+<script src="/intranet-tmpl/lib/jquery/plugins/buttons.html5.min_18.1200031.js"></script>
+<script type="text/javascript">
+//<![CDATA[
+    var MSG_DT_FIRST = _("First");
+    var MSG_DT_LAST = _("Last");
+    var MSG_DT_NEXT = _("Next");
+    var MSG_DT_PREVIOUS = _("Previous");
+    var MSG_DT_EMPTY_TABLE = _("No data available in table");
+    var MSG_DT_INFO = _("Showing _START_ to _END_ of _TOTAL_");
+    var MSG_DT_INFO_EMPTY = _("No entries to show");
+    var MSG_DT_INFO_FILTERED = _("(filtered from _MAX_ total entries)");
+    var MSG_DT_LENGTH_MENU = _("Show _MENU_ entries");
+    var MSG_DT_LOADING_RECORDS = _("Loading...");
+    var MSG_DT_PROCESSING = _("Processing...");
+    var MSG_DT_SEARCH = _("Search:");
+    var MSG_DT_ZERO_RECORDS = _("No matching records found");
+    var MSG_DT_ALL = _("All");
+    var CONFIG_EXCLUDE_ARTICLES_FROM_SORT = _("a an the");
+    var MSG_DT_COPY_TITLE = _("Copy to clipboard");
+    var MSG_DT_COPY_KEYS = _("Press ctrl or ⌘ + C to copy the table data<br>to your system clipboard.<br><br>To cancel, click this message or press escape.");
+    var MSG_DT_COPY_SUCCESS_ONE = _("Copied one row to clipboard");
+    var MSG_DT_COPY_SUCCESS_X = _("Copied %d rows to clipboard");
+//]]>
+</script>
+<script src="/intranet-tmpl/prog/js/datatables_18.1200031.js"></script>
+
+    
+
+<script>
+function KohaTable(id_selector, dt_parameters, columns_settings, add_filters) {
+    var counter = 0;
+    var hidden_ids = [];
+    var included_ids = [];
+    var selector = '#' + id_selector;
+
+    $(columns_settings).each( function() {
+        var named_id = $( 'thead th[data-colname="' + this.columnname + '"]', selector ).index( 'th' );
+        var used_id = dt_parameters.bKohaColumnsUseNames ? named_id : counter;
+        if ( used_id == -1 ) return;
+
+        if ( this['is_hidden'] == "1" ) {
+            hidden_ids.push( used_id );
+        }
+        if ( this['cannot_be_toggled'] == "0" ) {
+            included_ids.push( used_id );
+        }
+        counter++;
+    });
+
+    var exportColumns = ":visible";
+    if( dt_parameters.hasOwnProperty("exportColumns") ){
+        // A custom buttons configuration has been passed from the page
+        exportColumns = dt_parameters["exportColumns"];
+    }
+
+    var export_buttons = [
+        {
+            extend: 'excelHtml5',
+            text: _("Excel"),
+            exportOptions: {
+                columns: exportColumns
+            },
+        },
+        {
+            extend: 'csvHtml5',
+            text: _("CSV"),
+            exportOptions: {
+                columns: exportColumns
+            },
+        },
+        {
+            extend: 'copyHtml5',
+            text: _("Copy"),
+            exportOptions: {
+                columns: exportColumns
+            },
+        },
+        {
+            extend: 'print',
+            text: _("Print"),
+            exportOptions: {
+                columns: exportColumns
+            },
+        }
+    ];
+
+    dt_parameters[ "buttons" ] = [
+        {
+            extend: 'colvis',
+            fade: 100,
+            columns: included_ids,
+            className: "columns_controls",
+            titleAttr: _("Columns settings"),
+            text: '<i class="fa fa-lg fa-gear"></i> <span class="dt-button-text">' + _("Columns") + '</span>',
+            exportOptions: {
+                columns: exportColumns
+            },
+        },
+        {
+            extend: 'collection',
+            autoClose: true,
+            fade: 100,
+            className: "export_controls",
+            titleAttr: _("Export or print"),
+            text: '<i class="fa fa-lg fa-download"></i> <span class="dt-button-text">' + _("Export") + '</span>',
+            buttons: export_buttons
+        }
+
+    ];
+
+    var table = $(selector);
+    if ( add_filters ) {
+        // Duplicate the table header row for columnFilter
+        thead_row = table.find('thead tr');
+        clone = thead_row.clone().addClass('filters_row');
+        clone.find("th.NoSort").html('');
+        thead_row.before(clone);
+    }
+
+    table.dataTable($.extend(true, {}, dataTablesDefaults, dt_parameters));
+
+    $(hidden_ids).each(function(index, value) {
+        table.fnSetColumnVis( value, false );
+    });
+
+    if ( add_filters ) {
+        // show a link to activate filtering
+        link = $('<a>')
+            .attr('href', '#')
+            .attr('id', id_selector + '_activate_filters');
+        $("." + id_selector  + "_table_controls").prepend(link);
+        deactivate_filters(id_selector);
+    }
+
+    $(".columns_controls,.export_controls").tooltip();
+
+    return table;
+}
+
+</script>
+
+    <script src="/intranet-tmpl/lib/jquery/plugins/jquery.checkboxes.min_18.1200031.js"></script>
+    <script src="/intranet-tmpl/lib/jquery/plugins/jquery-ui-timepicker-addon.min_18.1200031.js"></script>
+    <script type="text/javascript">
+    //<![CDATA[
+
+        /* Localization of the timepicker plugin */
+        jQuery(function($){
+            $.timepicker.regional[''] = {
+                currentText: _("Now"),
+                closeText: _("Done"),
+                amNames: [_("AM"), _("A")],
+                pmNames: [_("PM"), _("P")],
+                timeSuffix: "",
+                timeOnlyTitle: _("Choose time"),
+                timeText: _("Time"),
+                hourText: _("Hour"),
+                minuteText: _("Minute"),
+                secondText: _("Second"),
+                millisecText: _("Millisecond"),
+                microsecText: _("Microsecond"),
+                timezoneText: _("Time zone"),
+                 isRTL: false 
+            };
+            $.timepicker.setDefaults($.timepicker.regional['']);
+        });
+
+    //]]>
+</script>
+
+    <script src="/intranet-tmpl/lib/jquery/plugins/jquery.dataTables.rowGrouping_18.1200031.js"></script>
+    <script src="/intranet-tmpl/prog/js/pages/circulation_18.1200031.js"></script>
+    <script src="/intranet-tmpl/prog/js/checkouts_18.1200031.js"></script>
+    <script src="/intranet-tmpl/prog/js/holds_18.1200031.js"></script>
+    <script src="/intranet-tmpl/prog/js/circ-patron-search-results_18.1200031.js"></script>
+    <script type="text/javascript">
+        /* Set some variable needed in circulation.js */
+        var MSG_DT_LOADING_RECORDS = _("Loading... you may continue scanning.");
+        var interface = "/intranet-tmpl";
+        var theme = "prog";
+        var borrowernumber = "606";
+        var branchcode = "FFZG";
+        var exports_enabled = "0";
+        var AllowRenewalLimitOverride = 1;
+        var AllowCirculate = 1;
+        var script = "circulation";
+        var relatives_borrowernumbers = new Array();
+        
+
+        var MSG_EXPORT_SELECT_CHECKOUTS = _("You must select checkout(s) to export");
+        var MSG_CONFIRM_DELETE_MESSAGE = _("Are you sure you want to delete this message? This cannot be undone.");
+
+        columns_settings_issues_table = [{"is_hidden":"1","cannot_be_toggled":"1","cannot_be_modified":"1","columnname":"sort_order"},{"cannot_be_modified":"1","columnname":"todays_or_previous_checkouts","cannot_be_toggled":"1","is_hidden":"1"},{"cannot_be_toggled":"1","columnname":"due_date_unformatted","cannot_be_modified":"1","is_hidden":"1"},{"is_hidden":0,"cannot_be_toggled":0,"columnname":"due_date","cannot_be_modified":0},{"is_hidden":0,"columnname":"title","cannot_be_modified":0,"cannot_be_toggled":0},{"is_hidden":0,"cannot_be_toggled":0,"cannot_be_modified":0,"columnname":"item_type"},{"is_hidden":1,"columnname":"collection","cannot_be_modified":0,"cannot_be_toggled":0},{"columnname":"location","cannot_be_modified":0,"cannot_be_toggled":0,"is_hidden":0},{"is_hidden":0,"cannot_be_toggled":0,"cannot_be_modified":0,"columnname":"homebranch"},{"cannot_be_toggled":"1","columnname":"checkout_on_unformatted","cannot_be_modified":"1","is_hidden":"1"},{"is_hidden":0,"cannot_be_toggled":0,"cannot_be_modified":0,"columnname":"checkout_on"},{"is_hidden":0,"cannot_be_toggled":0,"cannot_be_modified":0,"columnname":"checkout_from"},{"columnname":"callno","cannot_be_modified":0,"cannot_be_toggled":0,"is_hidden":0},{"is_hidden":0,"cannot_be_toggled":0,"cannot_be_modified":0,"columnname":"charge"},{"cannot_be_modified":0,"columnname":"fine","cannot_be_toggled":0,"is_hidden":0},{"is_hidden":0,"cannot_be_toggled":0,"columnname":"price","cannot_be_modified":0},{"is_hidden":0,"cannot_be_modified":"1","columnname":"renew","cannot_be_toggled":"1"},{"is_hidden":0,"columnname":"checkin","cannot_be_modified":0,"cannot_be_toggled":0},{"cannot_be_toggled":"1","columnname":"export","cannot_be_modified":"1","is_hidden":0}]
+        columns_settings_borrowers_table = [{"cannot_be_modified":"1","columnname":"name","cannot_be_toggled":"1","is_hidden":0},{"is_hidden":0,"cannot_be_toggled":0,"columnname":"cardnumber","cannot_be_modified":0},{"is_hidden":0,"cannot_be_modified":0,"columnname":"date_of_birth","cannot_be_toggled":0},{"is_hidden":0,"cannot_be_toggled":0,"cannot_be_modified":0,"columnname":"category"},{"is_hidden":0,"columnname":"library","cannot_be_modified":0,"cannot_be_toggled":0},{"is_hidden":0,"cannot_be_toggled":0,"cannot_be_modified":0,"columnname":"address"},{"is_hidden":"1","cannot_be_toggled":0,"cannot_be_modified":0,"columnname":"phone"}]
+
+        
+            if($.cookie("holdfor") != 606){
+                $.removeCookie("holdfor", { path: '/' });
+            }
+        
+
+        
+
+        // On-site checkout
+        function toggle_onsite_checkout(){
+            if ( $("#onsite_checkout").prop('checked') ) {
+                $("#duedatespec").val("2026-08-31 23:59")
+                
+            } else {
+                $("#duedatespec").datetimepicker({
+                    onClose: function(dateText, inst) {
+                        if (validate_date(dateText, inst) ) {
+                            $("#barcode").focus();
+                        }
+                    },
+                    hour: 23,
+                    minute: 59
+                }).on("change", function(e, value) {
+                    if ( ! is_valid_date( $(this).val() ) ) {$(this).val("");}
+                });
+            }
+        }
+
+        function Dopop(link) {
+            var newin = window.open(link, 'popup', 'width=600,height=400,resizable=1,toolbar=0,scrollbars=1,top');
+        }
+        $(document).ready(function() {
+            $('#mainform').on('submit',function() {
+                if ($("#barcode") && $("#barcode").val()) {
+                    $('#barcode').on('keypress',function(event) {
+                        $('#barcodeSubmittedModal').modal();
+                        event.preventDefault(); }
+                    );
+                }
+            });
+
+            if ( $('#clubs-tab').length ) {
+                $('#clubs-tab-link').on('click', function() {
+                    $('#clubs-tab').text(_("Loading..."));
+                    $('#clubs-tab').load('/cgi-bin/koha/clubs/patron-clubs-tab.pl?borrowernumber=606');
+                });
+            }
+
+            
+                // listen submit to trigger qslip on empty checkout
+                $('#mainform').bind('submit',function() {
+                    if ($('#barcode').val() == '') {
+                        return printx_window( 'qslip' );
+                    }
+                });
+            
+            toggle_onsite_checkout();
+            $("#onsite_checkout").click(function(){
+                toggle_onsite_checkout();
+            });
+
+            $("#suspend_until").datepicker({
+                onClose: function(dateText, inst) {
+                    validate_date(dateText, inst);
+                },
+                minDate: 1, // require that hold suspended until date is after today
+            });
+
+            
+        });
+    </script>
+    
+
+
+
+<script>
+    var advsearch = "";
+    var destination = "circ";
+
+    var CAN_user_borrowers_edit_borrowers = "1";
+
+    var dateformat = "iso";
+
+    var borrowernumber;
+    var number_of_adult_categories = 0;
+    
+        borrowernumber = "606";
+        
+    
+
+    
+</script>
+
+    <script src="/intranet-tmpl/prog/js/members-menu_18.1200031.js"></script>
+
+    
+    
+<script>window.RFID_CONFIG={"autoCheckin":true,"checkinTtl":60,"bookPrefix":"130","pauseWatchWhenHidden":true,"debug":true,"hint":true,"programming":true};window.RFID_CONTEXT={"number":"606","pluginVersion":"0.1.0","page":"/intranet/circ/circulation.pl","branch":"FFZG","enrolledVia":"open","userid":"dpavlin@ffzg.hr"};</script>
+<script>/* koha-rfid-3m810-js v0.1.0 built 2026-08-31T15:11:19.920Z */
+(()=>{var St=Object.defineProperty;var At=(a,e,t)=>e in a?St(a,e,{enumerable:!0,configurable:!0,writable:!0,value:t}):a[e]=t;var Z=(a,e,t)=>At(a,typeof e!="symbol"?e+"":e,t);var tt=new Uint8Array([213,0,5,4,0,17,140,102]),et=1500,rt=2500,nt=10,$t=(()=>{let a=new Uint16Array(256);for(let e=0;e<256;e++){let t=e<<8;for(let r=0;r<8;r++)t=t&32768?(t<<1^4129)&65535:t<<1&65535;a[e]=t}return a})();function at(a){let e=65535;for(let t=0;t<a.length;t++)e=(e<<8^$t[(e>>8^a[t])&255])&65535;return(e^65535)&65535}var I=a=>Array.from(a,e=>e.toString(16).padStart(2,"0")).join(""),P=a=>new Uint8Array((a.replace(/ /g,"").match(/../g)||[]).map(e=>parseInt(e,16))),T=a=>{let e=new Uint8Array(a.reduce((r,n)=>r+n.length,0)),t=0;for(let r of a)e.set(r,t),t+=r.length;return e},It={0:"Other",1:"Book",2:"Magazine",3:"Bound Journal",4:"Audio Tape",5:"Video",6:"CD/CD ROM",7:"Diskette",8:"Book with Diskette",9:"Book with CD/CD ROM",13:"Book with Audio Tape"},N=a=>new Uint8Array([a>>>24&255,a>>>16&255,a>>>8&255,a&255]);function W(a){let e=a instanceof Uint8Array?a:T(a);if(e.length<24)return null;let t=e.subarray(4,20),r=Math.max(0,t.indexOf(0)<0?16:t.indexOf(0)),n=(e[20]<<24|e[21]<<16|e[22]<<8|e[23])>>>0;return{set:e[1]>>4,total:e[1]&15,type:e[3],typeLabel:It[e[3]]||`Unknown(${e[3]})`,content:String.fromCharCode.apply(null,t.subarray(0,r)),branch:n>>>20&4095,library:n&1048575,custom:e[24]<<24|e[25]<<16|e[26]<<8|e[27]|0}}function st(a){let e=a.type!=null?a.type:a.content.startsWith("130")?1:0,t=((a.branch||0)&4095)<<20|(a.library||0)&1048575,r=new Uint8Array(16);for(let n=0;n<Math.min(16,a.content.length);n++)r[n]=a.content.charCodeAt(n)&255;return T([new Uint8Array([4,(a.set||1)<<4|(a.total||1),0,e]),r,N(t),N(a.custom||0),new Uint8Array(4)])}var Ct=a=>st({content:a}),Et=()=>new Uint8Array(32),vt=()=>T([...Array.from({length:6},()=>N(1431655765)),new Uint8Array(8)]),B=class{constructor(e,{log:t}={}){this.t=e,this.log=t||(()=>{}),this.rx=new Uint8Array(0),this.errors=0,this.tail=Promise.resolve()}_push(e){if(!e||!e.length)return;let t=new Uint8Array(this.rx.length+e.length);t.set(this.rx),t.set(e,this.rx.length),this.rx=t}async _need(e,t){for(;this.rx.length<e;){let r=t-Date.now();if(r<=0)return!1;this._push(await this.t.read(Math.min(250,r)))}return!0}async _frame(e){let t=Date.now()+e;for(;;){if(!await this._need(4,t))throw new Error("reader timeout");let r=this.rx[1]<<8|this.rx[2];if(r<3){this.rx=this.rx.subarray(1);continue}if(!await this._need(3+r,t))throw new Error("reader timeout");let n=this.rx[r+1]<<8|this.rx[r+2];if(at(this.rx.subarray(1,r+1))===n){let l=this.rx.slice(3,r+1);return this.rx=this.rx.subarray(r+3),l}this.rx=this.rx.subarray(1)}}async _lock(e){let t=this.tail,r;this.tail=new Promise(n=>{r=n}),await t.catch(()=>{});try{return await e()}finally{r()}}async _drain(){for(let e=0;e<8&&(await this.t.read(5)).length;e++);this.rx=new Uint8Array(0)}async cmd(e,t=et){return this._lock(async()=>(await this._drain(),this._cmd(e,t)))}async _cmd(e,t){let r=e.length+2,n=new Uint8Array(3+r);n[0]=214,n[1]=r>>8,n[2]=r&255,n.set(e,3);let c=at(n.subarray(1,3+e.length));n[3+e.length]=c>>8,n[4+e.length]=c&255,this.log(">>",I(n)),await this.t.write(n);let l=await this._frame(t);return this.log("<<",I(l)),l}async probe(){return this._lock(async()=>{await this._drain(),this.log(">>",I(tt)),await this.t.write(tt);let e=await this._frame(et);return this.log("<<",I(e)),e.slice(3,7).join(".")})}async inventory(){let e=await this.cmd(new Uint8Array([254,0,5])),t=e[4],r=[];for(let n=0;n<t;n++)r.push(I(e.subarray(5+n*8,13+n*8)));return r}async scan_(){try{let e=await this.inventory();return this.errors=0,e}catch(e){if(++this.errors<3||!this.t.reset)throw e;this.log("reset",String(e.message||e));try{await this.t.reset(),this.errors=0}catch(r){this.log("reset failed",String(r&&r.message?r.message:r))}this.rx=new Uint8Array(0);let t=await this.inventory();return this.errors=0,t}}async readAfi(e){let t=await this.cmd(T([new Uint8Array([10]),P(e)]));if(t[1]!==0)throw new Error("read AFI failed, status "+t[1]);return t[10]}async writeAfi(e,t){let r=P(e),n=-1;for(let c=0;c<nt;c++)if(await this.cmd(new Uint8Array([9,...r,t]),rt),n=await this.readAfi(e),n===t)return;throw new Error("AFI write did not stick: wanted "+t.toString(16)+", read "+(n>>>0).toString(16))}async readBlocks(e,t,r){let n=await this.cmd(new Uint8Array([2,...P(e),t,r]));if(n[1]!==0)throw new Error("read blocks failed, status "+n[1]);let c=n[10],l=[];for(let f=0;f<c;f++)l.push(n.subarray(13+f*6,17+f*6));return l}async writeBlocks(e,t){let r=P(e),n=t.length/4;for(let c=0;c<nt;c++)if(await this.cmd(T([new Uint8Array([4,...r,0,n,0]),t]),rt),I(T(await this.readBlocks(e,0,n)))===I(t))return;throw new Error("block write did not stick on "+e)}async scan(){let e=[];for(let t of await this.scan_()){let r={sid:t,content:"",security:"",tag_type:"RFID501",reader:"3M810"};try{r.security=this._afiHex(await this.readAfi(t));let n=await this.readBlocks(t,0,8),c=W(n);r.content=c?c.content:String.fromCharCode(...n[0])}catch{}e.push(r)}return{tags:e}}async program(e){let t=[],r=1;for(let n of e){let c=n.sid.toUpperCase(),l=n.content;if(l.length>16){r=0,t.push(`content for ${c} exceeds the RFID501 16-byte limit`);continue}try{let f;l.toLowerCase()==="blank"?(await this.writeBlocks(c,Et()),f=215):l.toLowerCase()==="3mblank"?(await this.writeBlocks(c,vt()),f=215):(await this.writeBlocks(c,n.tag?st(n.tag):Ct(l)),f=l.startsWith("130")?218:215),await this.writeAfi(c,f)}catch(f){r=0,t.push(String(f.message||f))}}return{ok:r,errors:t}}async secure(e){for(let t of e)try{await this.writeAfi(t.sid.toUpperCase(),typeof t.afi=="string"?parseInt(t.afi,16):t.afi)}catch(r){return{ok:0,error:String(r.message||r)}}return{ok:1}}_afiHex(e){return e.toString(16).padStart(2,"0").toUpperCase()}async close(){this.t.close&&await this.t.close()}};var j=a=>String(a&&a.message||a),O=class O{static async pick(e){try{return await navigator.serial.requestPort(e?{filters:e}:{})}catch{return null}}static async remembered(){return await navigator.serial.getPorts()}constructor(e,{baud:t=O.BAUD,log:r}={}){this.port=e,this.baud=t,this.log=r||(()=>{}),this.queue=[],this.waiters=[],this.abort=null,this.reading=null,this.reader=null}async open({attempts:e=3,backoffMs:t=250}={}){if(!this.port.readable){let r=null;for(let n=0;n<e;n++)try{await this.port.open({baudRate:this.baud}),r=null;break}catch(c){r=c,n+1<e&&this.log("open retry",`${n+1}/${e}: ${j(c)}`),await new Promise(l=>setTimeout(l,t*(n+1)))}if(r)throw r}this.abort=new AbortController,this.reading=this._drain(this.abort.signal)}async _drain(e){for(;this.port.readable&&!e.aborted;){let t=this.port.readable.getReader();this.reader=t;try{for(;;){let{value:r,done:n}=await t.read();if(n||e.aborted)break;r&&r.length&&this._push(r)}}catch(r){this.log("read error",String(r&&r.message?r.message:r))}finally{this.reader=null;try{t.releaseLock()}catch{}}if(e.aborted)break;await new Promise(r=>setTimeout(r,20))}}_push(e){let t=this.waiters.shift();t?t(e):this.queue.push(e),this.queue.length>64&&this.queue.shift()}_wakeAll(){for(;this.waiters.length;)this.waiters.shift()(new Uint8Array(0))}async write(e){let t=this.port.writable.getWriter();try{await t.write(e)}finally{t.releaseLock()}}async read(e){return this.queue.length?this.queue.shift():await new Promise(t=>{let r=setTimeout(()=>{let c=this.waiters.indexOf(n);c>=0&&this.waiters.splice(c,1),t(new Uint8Array(0))},e),n=c=>{clearTimeout(r),t(c)};this.waiters.push(n)})}async reset(){await this.close(),await new Promise(e=>setTimeout(e,250)),await this.open()}async close(){let e=(t,r)=>Promise.race([Promise.resolve(t).catch(()=>{}),new Promise(n=>setTimeout(n,r))]);this.abort&&this.abort.abort(),this._wakeAll(),this.reader&&await e(this.reader.cancel(),400),await e(this.reading,400);for(let t=0;t<3;t++)try{await this.port.close();break}catch(r){if(/closed/i.test(j(r)))break;this.log("~~","close retry: "+j(r)),await new Promise(n=>setTimeout(n,200))}this.reading=null,this.reader=null,this.abort=null,this.queue.length=0}};Z(O,"BAUD",19200);var F=O;async function ot({port:a,log:e=()=>{}}){let t={opened:!1,readerVersion:null,tags:null,error:null},r=new F(a,{log:e}),n=null;try{await r.open(),t.opened=!0,n=new B(r,{log:e}),t.readerVersion=await n.probe();let{tags:c}=await n.scan();t.tags=c.map(({sid:l,content:f,security:o,tag_type:g})=>({sid:l,content:f,security:o,tag_type:g}))}catch(c){t.error=String(c&&c.message||c),/open/i.test(t.error)&&/serial port/i.test(t.error)&&(t.error+=" — another tab or window may be holding the reader");try{await r.close()}catch{}}return{out:t,reader:n,transport:n?r:null}}function it({reader:a,initial:e=[],intervalMs:t=600,maxErrors:r=3,onChange:n=()=>{},onError:c=()=>{},onStop:l=()=>{},now:f=()=>Date.now()}={}){let o={on:!1,polls:0,changes:0,errors:0,scanning:!1,startedAt:null,stoppedAt:null,stopReason:null},g=!0,k=null,$=0,p=new Map(e.map(({sid:m,content:v})=>[m,v])),C=m=>m.slice().sort().join(","),E=m=>(o.on&&(g=!0,k&&clearTimeout(k),k=null,o.on=!1,o.stoppedAt=f(),o.stopReason=m,l(m)),o),b=()=>{g||(k=setTimeout(S,t))},h=m=>{if(!g){if(o.errors++,$++,c(String(m&&m.message||m),$),$>=r)return E(`gave up after ${$} read failures`);b()}};async function S(){if(g)return;let m;try{m=await a.inventory()}catch(y){return h(y)}if(o.polls++,$=0,C(m)===C([...p.keys()]))return b();o.scanning=!0;let v;try{({tags:v}=await a.scan())}catch(y){return o.scanning=!1,h(y)}o.scanning=!1;let R=new Map(v.map(y=>[y.sid,y.content])),D=v.filter(y=>!p.has(y.sid)),q=[...p.keys()].filter(y=>!R.has(y)).map(y=>({sid:y,content:p.get(y)}));p=R,o.changes++;try{await n({tags:v,added:D,removed:q})}catch(y){o.errors++,c(`onChange: ${String(y&&y.message||y)}`,0)}b()}return{start(){return o.on||(g=!1,$=0,o.on=!0,o.startedAt=f(),o.stopReason=null,S()),o},stop:E,stats:o}}var Ut=/^[0-9a-fA-F]{16}$/,ct=["blank","3mblank"],_t=/^[\x20-\x7e]+$/,Rt=a=>!a||/^0+$/.test(a)||/^\s*$/.test(a);function Tt({tags:a=[],sid:e,content:t,confirm:r=null,bookPrefix:n="130"}={}){if(!Ut.test(String(e)))return{ok:!1,error:`sid must be 16 hex digits, got "${e}"`};let c=e.toLowerCase(),l=a.find(g=>g.sid.toLowerCase()===c);if(!l)return{ok:!1,error:`${e} is not on the pad — put the tag you mean under the antenna`};if(typeof t!="string"||!t.length)return{ok:!1,error:"no content given"};if(ct.includes(t.toLowerCase()))return{ok:!0,blank:!0,tag:l};if(t.length>16)return{ok:!1,error:`"${t}" is ${t.length} characters; RFID501 holds 16`};if(!_t.test(t))return{ok:!1,error:"content must be printable ASCII"};let f=l.content||"";if(!Rt(f)&&!(n&&f.startsWith(n))&&String(r)!==f)return{ok:!1,error:`tag holds "${f}", which is not a book barcode — repeat it as confirm to overwrite a patron card or an unknown tag`};let o=a.find(g=>g.sid.toLowerCase()!==c&&g.content===t);return o?{ok:!1,error:`"${t}" is already on the pad (${o.sid}) — that would be a duplicate barcode`}:{ok:!0,tag:l}}async function lt({reader:a,tags:e=[],sid:t,content:r,confirm:n=null,bookPrefix:c="130",log:l=()=>{},now:f=()=>Date.now()}={}){let o={at:f(),sid:t.toLowerCase(),from:null,to:r,afi:null,verified:!1,error:null},g=Tt({tags:e,sid:t,content:r,confirm:n,bookPrefix:c});if(!g.ok)return o.error=g.error,l("program refused",o.error),o;o.from=g.tag.content||"";try{let k=await a.program([{sid:t,content:r}]);if(!k.ok)throw new Error((k.errors||["program failed"]).join("; "));let $=await K({reader:a,sid:t});Object.assign(o,$),o.verified=ct.includes(String(r).toLowerCase())?o.empty:o.content===r,l("programmed",`${t} ${o.from||"(blank)"} -> ${r} (afi ${o.afi}, ${o.verified?"verified":"NOT VERIFIED"})`)}catch(k){o.error=String(k&&k.message||k),l("program failed",`${t}: ${o.error}`)}return o}async function K({reader:a,sid:e}){let t=await a.readAfi(e),r=await a.readBlocks(e,0,8),n=new Uint8Array(r.reduce((l,f)=>l.concat([...f]),[])),c=W(n);return{afi:I(new Uint8Array([t])).toUpperCase(),secure:t===218,blocks:r.map(l=>I(l)).join(" "),content:c?c.content:"",itemType:c?c.typeLabel:null,branch:c?c.branch:null,library:c?c.library:null,empty:!I(n).replace(/[05]/g,"").length}}var ft="rfid_checkin",L=a=>(a&&(a.textContent||a.innerText)||"").replace(/\s+/g," ").trim(),Dt=/\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}/;function Pt({barcode:a=null,returned:e=[]}={}){let t=!!a&&e.some(r=>r===a);return{ok:t,detail:t?a:"not confirmed"}}function dt(a){let e=a&&a.querySelectorAll?[...a.querySelectorAll("table#checkedintable tbody tr")]:[],t=[];for(let r of e){let n=o=>r.querySelector?L(r.querySelector("td."+o)):"",c=o=>!!(r.querySelector&&r.querySelector("td."+o)),l=c("ci-barcode")?n("ci-barcode"):(L(r).match(/\b\d{5,14}\b/)||[""])[0],f=c("ci-duedate")?n("ci-duedate"):L(r);l&&Dt.test(f)&&t.push(l)}return{returned:t,messages:a&&a.querySelectorAll?[...a.querySelectorAll(".dialog.alert, .dialog.message")||[]].map(L).filter(Boolean):[]}}function ut({store:a,now:e=()=>Date.now(),ttlMs:t=6e4,bookPrefix:r="130",submit:n=()=>{},onOutcome:c=()=>{},log:l=()=>{}}={}){let o=(()=>{try{return JSON.parse(a.getItem(ft))||null}catch{return null}})()||{pending:null,handled:{}},g=()=>{try{a.setItem(ft,JSON.stringify(o))}catch{}},k=b=>!!o.handled[b],$=b=>b&&b!==o.pending&&(!r||b.startsWith(r))&&!k(b);return{report:b=>{if(!o.pending)return null;let h=o.pending,S=Pt({barcode:h,...b});return o.handled[h]=e(),o.pending=null,g(),l("check-in "+h,S.ok?"ok":"not confirmed"),c(S,h),S},pump:b=>{if(o.pending)return null;for(let[S,m]of Object.entries(o.handled))e()-m>t&&delete o.handled[S];let h=(b||[]).map(S=>S.content).filter(Boolean).find($)||null;return h?(o.pending=h,g(),l("check-in posted",h),n(h),h):null},forget:b=>{let h=!1;for(let S of b||[])o.handled[S]&&(delete o.handled[S],h=!0);h&&g()},handled:k,state:()=>JSON.parse(JSON.stringify(o)),reset:()=>{o={pending:null,handled:{}},g()}}}var ht="rfid-toasts";function gt(a,{holdMs:e=5e3,max:t=3,setTimeout:r=globalThis.setTimeout}={}){let n=a.document;if(!n||!n.createElement)return()=>{};let c=()=>{let l=n.getElementById&&n.getElementById(ht);return l||(l=n.createElement("div"),l.id=ht,l.setAttribute("role","status"),l.setAttribute("aria-live","polite"),l.style.cssText="position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:10000;font:13px/1.5 system-ui,sans-serif;pointer-events:none;text-align:center",(n.body||n.documentElement).appendChild(l),l)};return l=>{try{let f=c(),o=n.createElement("div");for(o.textContent=l,o.style.cssText="display:inline-block;margin-top:4px;padding:5px 12px;border-radius:4px;background:#0f7a0f;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.25)",f.insertBefore(o,f.firstChild);f.children.length>t;)f.removeChild(f.lastChild);r(()=>{o.parentNode&&o.parentNode.removeChild(o)},e)}catch{}}}var Bt="0.1.0",V="rfid_armed",H="rfid_keepwatching",pt="rfid-boot-hint";function Ft(a,{now:e=()=>Date.now()}={}){let t={version:Bt,installedAt:e(),gate:"dormant",server:a.RFID_CONTEXT||null,config:a.RFID_CONFIG||{},watching:!1,writes:[],log:[]};a.rfidM0=t;let r=(s,i)=>(t.log.push(`${e()} ${s}${i===void 0?"":": "+i}`),t.log.length),n=(s,i)=>{try{return i()}catch(d){r(`${s} failed`,String(d&&d.message||d));return}},c={get:s=>n("localStorage.get",()=>a.localStorage.getItem(s)),set:(s,i)=>n("localStorage.set",()=>a.localStorage.setItem(s,i)),del:s=>n("localStorage.del",()=>a.localStorage.removeItem(s))},l=n("navigator.serial",()=>a.navigator&&a.navigator.serial);if(!l)return t.gate="unsupported",r("no navigator.serial — staying dormant"),t;t.hasSerial=!0;let f=t.config,o=()=>c.get(V)==="1",g=s=>s?c.set(V,"1"):c.del(V),k=()=>!(f.pauseWatchWhenHidden===!1||c.get(H)==="1"),$=async()=>{try{return await l.getPorts()||[]}catch(s){return r("getPorts failed",String(s&&s.message||s)),[]}},p=null,C=null,E=null,b="position:fixed;right:6px;bottom:6px;z-index:9999;font:11px/1.4 monospace;padding:1px 5px;border:1px solid transparent;border-radius:3px;text-decoration:none",h=()=>n("paint",()=>{if(!E)return;let s=(t.tags||[]).length,i="RFID —",d="RFID reader: dormant",u="opacity:.45;color:#666";if(t.gate==="ready"){let w=(t.tags||[]).map(U=>U.content||U.sid).join(", ");i=`RFID ✓ ${t.readerVersion||"?"}${s?` · ${s}`:""}`,d=`reader ${t.readerVersion}; ${s} tag(s)${w?": "+w:""}`,u="opacity:1;color:#075707;background:#e8f6e8;border-color:#a9d9a9"}else t.gate==="error"?(i="RFID !",d="reader failed: "+(t.error||"unknown"),u="opacity:.95;color:#a11111;background:#fdeeee;border-color:#e6b3b3"):t.gate==="unsupported"?(i="RFID ✗",d="this browser has no Web Serial — nothing will happen here",u="opacity:.5;color:#a11111"):t.gate==="needs-grant"||t.gate==="cancelled"?(i="RFID ?",d="armed, but no device chosen yet",u="opacity:.85;color:#8a6100;background:#fff8e5;border-color:#e4cf9a"):t.gate==="choosing"||t.gate==="booting"?(i="RFID …",d="waiting for the device chooser / reader",u="opacity:.85;color:#333"):t.gate==="disarmed"&&(d="RFID reader: disarmed (click to connect)");t.lastOutcome&&(d+=`; last check-in ${t.lastOutcome.barcode} ${t.lastOutcome.ok?"ok":"not confirmed"}`),!t.watching&&t.paused&&(d+=`; watch paused (${t.paused})`);let x=t.pulseUntil&&e()<t.pulseUntil;E.textContent=i,E.title=`${d}${t.watching?" (watching)":""} — click, or Ctrl+Alt+R`,E.style.cssText=`${b};${u}${x?";background:#fff3b0;opacity:1":""}`}),S=null,m=()=>{t.pulseUntil=e()+1200,h(),S&&n("clear pulse",()=>clearTimeout(S)),S=n("pulse timer",()=>setTimeout(()=>{t.pulseUntil=0,h()},1300))},v=()=>!a.document||!a.document.forms?null:[...a.document.forms].find(s=>/circ\/returns\.pl$/.test(s.getAttribute("action")||""))||null,R=({replaceStale:s=!1}={})=>n("fill checkin",()=>{if(f.fillCheckin===!1)return;let i=(t.tags||[]).filter(w=>w.content);if(!i.length)return;let d=v();if(!d||!d.elements||!d.elements.barcode)return;let u=d.elements.barcode;if(u.value){let w=i.some(U=>U.content===u.value);if(w||!s){r("checkin left alone",`field holds "${u.value}"${w?" (still on the pad)":""}`);return}}let x=f.bookPrefix&&i.find(w=>w.content.startsWith(f.bookPrefix))||i[0];x.content!==u.value&&(u.value=x.content,t.filled=x.content,n("focus",()=>u.focus&&u.focus()),r("checkin filled",`${x.content} (sid ${x.sid}) from ${i.length} tag(s) on the pad`))}),D=f.toasts===!1?()=>{}:n("toasts",()=>gt(a))||(()=>{}),q={getItem:s=>n("sessionStorage.get",()=>a.sessionStorage.getItem(s)),setItem:(s,i)=>n("sessionStorage.set",()=>a.sessionStorage.setItem(s,i)),removeItem:s=>n("sessionStorage.del",()=>a.sessionStorage.removeItem(s))},y=s=>n("post check-in",()=>{let i=v();return!i||!i.elements||!i.elements.barcode?!1:(i.elements.barcode.value=s,M("check-in posted"),i.submit(),!0)}),_=f.autoCheckin===!0?ut({store:q,now:e,bookPrefix:f.bookPrefix,ttlMs:(f.checkinTtl||60)*1e3,submit:y,log:r,onOutcome:(s,i)=>{t.lastOutcome={at:e(),barcode:i,ok:s.ok},s.ok&&D(`✓ checked in ${i}`),h()}}):null,J=async s=>{t.gate="booting";let{out:i,reader:d,transport:u}=await ot({port:s[0],log:(x,w)=>r(x,w)});return p=d,C=u,Object.assign(t,i),t.gate=i.error?"error":"ready",r("gate",t.gate),h(),t.gate==="ready"&&(_?(_.report(dt(a.document)),_.pump(t.tags)||X()):(R(),X())),t},Y=async()=>{t.gate="choosing";let s=null;try{s=await l.requestPort()}catch(i){r("requestPort failed",String(i&&i.message||i))}return s?(g(!0),J([s])):(t.gate="cancelled",r("chooser cancelled"),h(),t)},z=async()=>(M("disconnected"),g(!1),t.gate="disarmed",h(),C&&n("close",()=>C.close()),p=null,C=null,t),mt=async()=>{if(!p)return{error:"not connected"};try{let{tags:s}=await p.scan();return{tags:s.map(({sid:i,content:d,security:u})=>({sid:i,content:d,security:u}))}}catch(s){return{error:String(s&&s.message||s)}}};t.connect=Y,t.stop=z,t.inventory=()=>p?p.inventory():Promise.resolve(null);let A=null,M=s=>{A&&(n("watch stop",()=>A.stop(s)),A=null,t.watching=!1)},X=()=>{if(f.watch===!1||!p||A)return;let s=f.watchIntervalMs||600;A=it({reader:p,initial:t.tags||[],intervalMs:s,onChange:({tags:i,added:d,removed:u})=>{t.tags=i.map(({sid:w,content:U,security:xt,tag_type:kt})=>({sid:w,content:U,security:xt,tag_type:kt}));let x=w=>w.map(U=>U.content||U.sid).join(" ");if(r("pad changed",`${d.length?`+${x(d)} `:""}${u.length?`-${x(u)}`:""}`.trim()+` (${t.tags.length} on the pad)`),m(),_){if(_.forget(u.map(w=>w.content)),_.pump(t.tags))return}else R({replaceStale:!0})},onError:(i,d)=>r(d?`watch error #${d}`:"watch error",i),onStop:i=>{t.watching=!1,t.paused=i,r("watch stopped",i),h()}}),A.start(),t.watching=!0,t.paused=null,t.watch=A.stats,r("watching the pad",`inventory every ${s} ms`),h(),n("watch listeners",()=>{let i=a.document;!A||!i||!i.addEventListener||(i.addEventListener("visibilitychange",()=>{i.hidden?k()?A.stop("tab hidden"):r("tab hidden — keep-watching is on, still polling"):A.stats.on||(A.start(),t.watching=!0,t.paused=null,r("watch resumed"),h())}),a.addEventListener("pagehide",()=>M("page hiding")))})},yt=async()=>{if(!p)return{error:"not connected"};try{let{tags:s}=await p.scan();return t.tags=s.map(({sid:i,content:d,security:u,tag_type:x})=>({sid:i,content:d,security:u,tag_type:x})),r("rescan",`${t.tags.length} tag(s) on the pad`),m(),R({replaceStale:!0}),{tags:t.tags}}catch(s){return{error:String(s&&s.message||s)}}},wt=async(s,i,d={})=>{if(!p)return{error:"not connected"};if(f.programming!==!0)return{error:'tag programming is off for this installation (config: "programming": true)'};let u=await lt({reader:p,tags:t.tags||[],sid:s,content:i,bookPrefix:f.bookPrefix,log:r,...d});if(t.writes.push(u),!u.error){let x=(t.tags||[]).find(w=>w.sid.toLowerCase()===String(s).toLowerCase());x&&(x.content=u.content||"",x.security=u.afi),m()}return u};t.keepWatching=(s=!0)=>(s?c.set(H,"1"):c.del(H),r("keep-watching",s?"on":"off"),!s&&a.document&&a.document.hidden&&A&&A.stop("tab hidden"),!k()),t.scan=mt,t.rescan=yt,t.checkins=_,t.toast=D,t.program=wt,t.readTag=s=>p?K({reader:p,sid:s}):Promise.resolve({error:"not connected"}),t.canProgram=f.programming===!0;let G=()=>!!C,bt=()=>G()?(r("already connected — chooser skipped"),t):(g(!0),r("armed"),Y()),Q=()=>G()?z():bt();return a.addEventListener("keydown",s=>{s.ctrlKey&&s.altKey&&(s.key==="r"||s.key==="R"||s.code==="KeyR")&&(s.preventDefault(),n("shortcut",Q))}),f.hint!==!1&&n("hint",()=>{let s=a.document;if(!s||s.getElementById(pt))return;let i=s.createElement("a");i.id=pt,i.href="#",i.addEventListener("click",d=>{d.preventDefault(),n("pill click",Q)}),E=i,h(),(s.getElementById("footer")||s.body||s.documentElement).appendChild(i)}),t.done=(async()=>{let s=n("search",()=>new a.URLSearchParams(a.location.search));if(s&&(s.get("rfid")==="keep"||s.get("rfid")==="nokeep")){let d=s.get("rfid")==="keep";g(!0),t.keepWatching(d),n("replaceState",()=>a.history.replaceState(null,"",a.location.pathname))}else if(s&&s.get("rfid")==="1")g(!0),r("armed via ?rfid=1"),n("replaceState",()=>a.history.replaceState(null,"",a.location.pathname));else if(s&&s.get("rfid")==="0"){g(!1),t.gate="disarmed";return}let i=await $();if(t.ports=i.length,!o()){t.gate="idle",r("not armed — dormant",`ports remembered: ${i.length}`);return}if(!i.length){t.gate="needs-grant",r("armed but no port granted — needs one click"),h();return}await J(i)})().catch(s=>{t.gate="error",t.error=String(s&&s.message||s),r("boot threw",t.error),h()}),t}typeof window<"u"&&typeof window.document<"u"&&Ft(window);})();
+</script><a id="rfid-boot-hint" href="#" title="reader 10.5.0.2; 0 tag(s) (watching) — click, or Ctrl+Alt+R" style="position: fixed; right: 6px; bottom: 6px; z-index: 9999; font: 11px / 1.4 monospace; padding: 1px 5px; border: 1px solid rgb(169, 217, 169); border-radius: 3px; text-decoration: none; opacity: 1; color: rgb(7, 87, 7); background: rgb(232, 246, 232);">RFID ✓ 10.5.0.2</a>
+
+
+<div id="ui-datepicker-div" class="ui-datepicker ui-widget ui-widget-content ui-helper-clearfix ui-corner-all"></div>        <div id="suspend-modal" class="modal fade" role="dialog" aria-hidden="true">            <div class="modal-dialog">            <div class="modal-content">            <form id="suspend-modal-form" class="form-inline">                <div class="modal-header">                    <button type="button" class="closebtn" data-dismiss="modal" aria-hidden="true">×</button>                    <h3 id="suspend-modal-label">Suspend hold on <i><span id="suspend-modal-title"></span></i></h3>                </div>                <div class="modal-body">                    <input type="hidden" id="suspend-modal-reserve_id" name="reserve_id">                    <label for="suspend-modal-until">Suspend until:</label>                    <input name="suspend_until" id="suspend-modal-until" class="suspend-until hasDatepicker" size="10">                    <p></p><a class="btn btn-link" id="suspend-modal-clear-date">Clear date to suspend indefinitely</a><p></p>                </div>                <div class="modal-footer">                    <button id="suspend-modal-submit" class="btn btn-primary" type="submit" name="submit">Suspend</button>                    <a href="#" data-dismiss="modal" aria-hidden="true" class="cancel">Cancel</a>                </div>            </form>            </div>            </div>        </div>    </body></html>

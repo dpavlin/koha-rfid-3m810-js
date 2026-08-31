@@ -50,7 +50,10 @@ const ARM_KEY = 'rfid_armed';
 const KEEP_KEY = 'rfid_keepwatching';
 const HINT_ID = 'rfid-boot-hint';
 
-export function install(win, { now = () => Date.now() } = {}) {
+// `boot` is injectable for the same reason `now` is: the page logic is worth testing
+// with a reader that answered, and the alternative is a fake SerialPort playing back
+// frames for every page-behaviour test.
+export function install(win, { now = () => Date.now(), boot = bootReader } = {}) {
 	const m0 = {
 		version: VERSION,
 		installedAt: now(),
@@ -183,39 +186,80 @@ export function install(win, { now = () => Date.now() } = {}) {
 	// The check-in form, picked by where it posts to. Not by the field name: Koha
 	// reuses name=barcode for renewal, which checks an item in *and issues it back*
 	// out with a new due date.
-	const checkinForm = () => {
-		if (!win.document || !win.document.forms) return null;
-		return [...win.document.forms].find((f) => /circ\/returns\.pl$/.test(f.getAttribute('action') || '')) || null;
+	/*
+	 * Which box on this page a scanned barcode belongs in. Two things make this not
+	 * one selector:
+	 *
+	 *  - circulation.pl carries three forms with a field named `barcode`: the checkout
+	 *    box (`form#mainform`) plus the returns and renew boxes in the header. Filling
+	 *    `input[name=barcode]` there can put an item in the returns box while the
+	 *    librarian is standing at a patron's checkout.
+	 *  - renew.pl has the box the librarian uses and a hidden tab-panel copy
+	 *    (`#ren_barcode`, inside a display:none panel).
+	 *
+	 * So: the page decides which form, and the form decides which field. Verified
+	 * against tests/fixtures/circulation-pl-*.html and renew-pl-patron.html, captured
+	 * from the live fork — not against upstream templates, which differ.
+	 *
+	 * Only check-in may be posted by the plugin. `post: true` is the whole policy:
+	 * a check-in is reversible and Koha's own page reports it, while taking an item
+	 * out of the library on a scan nobody confirmed is a different class of mistake.
+	 */
+	const PAGE_TARGETS = [
+		{ word: 'checkin', page: /circ\/returns\.pl$/, post: true },
+		{ word: 'checkout', page: /circ\/circulation\.pl$/, post: false },
+		{ word: 'renew', page: /circ\/renew\.pl$/, post: false },
+	];
+
+	const target = () => {
+		const path = (win.location && win.location.pathname) || '';
+		const spec = PAGE_TARGETS.find((s) => s.page.test(path));
+		if (!spec || !win.document || !win.document.forms) return null;
+		// Forms on this page that post to it and carry a barcode field. On the fixture
+		// pages the page's own box is `id="barcode"` and the header copies are
+		// `ret_barcode` / `ren_barcode`, so that id is the tie-break — it is what Koha
+		// puts on the field the librarian is meant to use.
+		const candidates = [...win.document.forms].filter(
+			(f) => spec.page.test(f.getAttribute('action') || '') && f.elements && f.elements['barcode'],
+		);
+		const form = candidates.find((f) => f.elements['barcode'].id === 'barcode') || candidates[0];
+		return form ? { form, field: form.elements['barcode'], word: spec.word, post: spec.post } : null;
 	};
 
-	// M1's first slice of page logic, deliberately small: put a scanned barcode in
-	// the check-in box and let the librarian press Return. Books first, because a
-	// patron card on the pad is just another 10-digit barcode as far as we know.
+	// M1's page logic, deliberately one action deep: put a scanned barcode in the box
+	// this page uses and let the librarian press Return. Books first, because a patron
+	// card on the pad is just another 10-digit barcode as far as we know.
 	//
-	// `replaceStale` is what makes watching useful: once the barcode in the box is
-	// no longer on the pad, whatever it referred to has been dealt with, so a tag
-	// that is on the pad should take its place.
-	const fillCheckin = ({ replaceStale = false } = {}) =>
-		safe('fill checkin', () => {
+	// `replaceStale` is what makes watching useful: once the barcode in the box is no
+	// longer on the pad, whatever it referred to has been dealt with, so a tag that is
+	// on the pad should take its place. A field the page disabled — circulation.pl does
+	// exactly that while it waits for "Please confirm checkout" — is left alone: typing
+	// into it would look like readiness and submit nothing.
+	const fillScanBox = ({ replaceStale = false } = {}) =>
+		safe('fill scan box', () => {
 			if (cfg.fillCheckin === false) return;
 			const seen = (m0.tags || []).filter((t) => t.content);
 			if (!seen.length) return;
-			const form = checkinForm();
-			if (!form || !form.elements || !form.elements['barcode']) return;
-			const field = form.elements['barcode'];
+			const t = target();
+			if (!t) return;
+			const { field, word } = t;
+			if (field.disabled) {
+				note(`${word} box disabled — page is waiting for something else`, field.id || word);
+				return;
+			}
 			if (field.value) {
-				const onPad = seen.some((t) => t.content === field.value);
+				const onPad = seen.some((x) => x.content === field.value);
 				if (onPad || !replaceStale) {
-					note('checkin left alone', `field holds "${field.value}"${onPad ? ' (still on the pad)' : ''}`);
+					note(`${word} box left alone`, `holds "${field.value}"${onPad ? ' (still on the pad)' : ''}`);
 					return;
 				}
 			}
-			const pick = (cfg.bookPrefix && seen.find((t) => t.content.startsWith(cfg.bookPrefix))) || seen[0];
+			const pick = (cfg.bookPrefix && seen.find((x) => x.content.startsWith(cfg.bookPrefix))) || seen[0];
 			if (pick.content === field.value) return;
 			field.value = pick.content;
 			m0.filled = pick.content;
 			safe('focus', () => field.focus && field.focus());
-			note('checkin filled', `${pick.content} (sid ${pick.sid}) from ${seen.length} tag(s) on the pad`);
+			note(`${word} box filled`, `${pick.content} (sid ${pick.sid}) from ${seen.length} tag(s) on the pad`);
 		});
 
 	// --- the check-in session: one check-in outlives the page that posted it ----
@@ -230,8 +274,9 @@ export function install(win, { now = () => Date.now() } = {}) {
 	// with it, and the next page load picks the story up from sessionStorage.
 	const postCheckin = (barcode) =>
 		safe('post check-in', () => {
-			const form = checkinForm();
-			if (!form || !form.elements || !form.elements['barcode']) return false;
+			const t = target();
+			if (!t || !t.post) return false; // never post a checkout or a renew: see PAGE_TARGETS
+			const form = t.form;
 			form.elements['barcode'].value = barcode;
 			stopWatch('check-in posted');
 			form.submit();
@@ -259,7 +304,7 @@ export function install(win, { now = () => Date.now() } = {}) {
 
 	const start = async (ports) => {
 		m0.gate = 'booting';
-		const { out, reader: r, transport: t } = await bootReader({ port: ports[0], log: (s, d) => note(s, d) });
+		const { out, reader: r, transport: t } = await boot({ port: ports[0], log: (s, d) => note(s, d) });
 		reader = r;
 		transport = t;
 		Object.assign(m0, out);
@@ -267,12 +312,16 @@ export function install(win, { now = () => Date.now() } = {}) {
 		note('gate', m0.gate);
 		paint();
 		if (m0.gate === 'ready') {
+			// The page gets the first tag either way: on returns.pl pump() is about to post
+			// it, and on every other page this is the whole job. Skipping it when auto-checkin
+			// is on meant a scan filled nothing on circulation.pl, where pump() has nothing
+			// to post and the watch may be switched off.
+			fillScanBox();
 			if (checkins) {
 				checkins.report(readCheckinResult(win.document));
 				// pump() navigates when it posts something; then the pad is not ours
 				if (!checkins.pump(m0.tags)) startWatch();
 			} else {
-				fillCheckin();
 				startWatch();
 			}
 		}
@@ -354,7 +403,7 @@ export function install(win, { now = () => Date.now() } = {}) {
 				if (checkins) {
 					checkins.forget(removed.map((t) => t.content));
 					if (checkins.pump(m0.tags)) return; // posted; the page is going away
-				} else fillCheckin({ replaceStale: true });
+				} else fillScanBox({ replaceStale: true });
 			},
 			onError: (msg, n) => note(n ? `watch error #${n}` : 'watch error', msg),
 			onStop: (why) => {
@@ -400,7 +449,7 @@ export function install(win, { now = () => Date.now() } = {}) {
 			m0.tags = tags.map(({ sid, content, security, tag_type }) => ({ sid, content, security, tag_type }));
 			note('rescan', `${m0.tags.length} tag(s) on the pad`);
 			pulse();
-			fillCheckin({ replaceStale: true });
+			fillScanBox({ replaceStale: true });
 			return { tags: m0.tags };
 		} catch (e) {
 			return { error: String((e && e.message) || e) };
@@ -438,6 +487,12 @@ export function install(win, { now = () => Date.now() } = {}) {
 	};
 
 	m0.scan = scan;
+	// what the plugin thinks this page's scan box is — the answer when a fill goes to
+	// the wrong place, or nowhere (three forms on circulation.pl share the field name)
+	m0.target = () => {
+		const t = safe('target', target);
+		return t ? { page: t.word, posts: !!t.post, disabled: !!t.field.disabled, id: t.field.id || null } : null;
+	};
 	m0.rescan = rescan;
 	m0.checkins = checkins;
 	m0.toast = toast;

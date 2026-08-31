@@ -7,6 +7,7 @@
 #   make deploy      — backup on server, deploy plugin + bundle, restart plack
 #   make rollback    — restore the newest backup on the server
 #   make log         — tail the RFID decisions from the Koha error log
+#   make reader      — dev rig only: re-bind + re-attach the reader over USB/IP
 #   make clean       — remove build artifacts
 
 NODE ?= node
@@ -15,10 +16,10 @@ INSTANCE ?= ffzg
 BUNDLE := plugin/Koha/Plugin/Rot13/RFID/koha-rfid.js
 SRCS   := $(shell find src build package.json -type f 2>/dev/null)
 
-.PHONY: bundle test test-policy check deploy rollback log clean help
+.PHONY: bundle test test-policy check deploy rollback log reader clean help
 
 help:
-	@sed -n '3,10p' Makefile | sed 's/^# \{0,1\}//'
+	@sed -n '3,11p' Makefile | sed 's/^# \{0,1\}//'
 
 bundle: $(BUNDLE)
 
@@ -48,6 +49,12 @@ log:
 # what the plugin decides, as it decides it (plack logs to files here, not journald)
 live-log:
 	ssh $(HOST) "sudo tail -f /var/log/koha/$(INSTANCE)/plack-error.log | grep --line-buffered 'RFID'"
+
+# The test reader hangs off another machine; a physical re-plug leaves it unbound on the
+# host and Chrome then says "Failed to open serial port". Workstations plug it in
+# directly — this target is for the dev rig only (docs/usbip-reader.md).
+reader:
+	./tools/reader-up.sh
 
 clean:
 	rm -f $(BUNDLE) $(BUNDLE).rejected

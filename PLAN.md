@@ -203,9 +203,19 @@ Proposal — replace the dead F4 notice with the real thing:
 - **M1 core** — bootstrap + session state machine + status dot/toast + Connect,
   scan path for returns/circulation/renew with page logic moved verbatim,
   deploy scripts, driver capture-replay tests, README.
-  *Partly done:* status pill ✓, check-in autofill ✓, pad watching with appear/disappear
-detection ✓ (all three verified against the live reader), deploy scripts ✓, tests ✓.
-  Missing: session state machine, explicit Connect UI, circulation/renew page logic.
+  *Done:* status pill ✓, check-in autofill ✓, pad watching with appear/disappear
+detection ✓, page targets for `returns.pl` / `circulation.pl` / `renew.pl` ✓, deploy
+scripts ✓, tests ✓ (77, hardware-free).
+  Page targeting is not one selector: `circulation.pl` renders three forms with a field
+named `barcode` (the checkout box plus the returns and renew boxes in the header) and
+`renew.pl` has a hidden `#ren_barcode` in a `display:none` panel. The page picks the
+form, the form picks the field, and the tie-break is `id="barcode"` — the id Koha gives
+the field the librarian uses. Live on the reader: tag on the pad → the visible box on
+each page holds the barcode, both header copies stay empty, nothing is submitted.
+  Check-in remains the only thing the plugin may post (`PAGE_TARGETS[].post`); filling
+the checkout box is where auto-checkout would start, and it is deliberately not taken.
+  Missing: a Connect affordance a librarian can see without being told (the pill and
+Ctrl+Alt+R are it for now).
 - **M2 programming** — moredetail panel + guardrails + write log + placement photo.
   *Started:* the guard (four rules, `core/tagwrite.js`), the write log (`m0.writes`),
   `programming` off by default, read-back verification ✓ — all exercised on a real

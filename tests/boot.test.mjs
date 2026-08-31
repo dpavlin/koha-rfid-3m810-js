@@ -11,58 +11,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { install } from '../src/core/boot.js';
-
-function fakeWindow({ serial = false, armed = false, ports = [], search = '', forms = [] } = {}) {
-	const calls = { listeners: [], createElement: 0, appended: 0, elements: [] };
-	const storage = {};
-	if (armed) storage.rfid_armed = '1';
-
-	const el = () => ({ style: { cssText: '' }, addEventListener() {}, textContent: '', href: '', title: '', id: '' });
-	const win = {
-		navigator: serial
-			? {
-					serial: {
-						getPorts: async () => ports,
-						requestPort: async () => null,
-					},
-				}
-			: {},
-		localStorage: {
-			getItem: (k) => (k in storage ? storage[k] : null),
-			setItem: (k, v) => {
-				storage[k] = String(v);
-			},
-			removeItem: (k) => {
-				delete storage[k];
-			},
-		},
-		location: { search, pathname: '/cgi-bin/koha/circ/returns.pl' },
-		history: { replaceState() {} },
-		URLSearchParams,
-		document: {
-			getElementById: () => null,
-			createElement: () => (calls.createElement++, calls.elements.push(el()) && calls.elements.at(-1)),
-			forms,
-			body: { appendChild: () => calls.appended++ },
-		},
-		addEventListener: (type) => calls.listeners.push(type),
-		RFID_CONFIG: {},
-		RFID_CONTEXT: { page: '/intranet/circ/returns.pl', branch: 'FFZG' },
-	};
-	return { win, calls, storage, elements: calls.elements };
-}
-
-const deadPort = () => ({
-	opens: 0,
-	reads: 0,
-	readable: null,
-	writable: null,
-	async open() {
-		this.opens++;
-		throw new Error('no device attached');
-	},
-	async close() {},
-});
+import { fakeWindow, deadPort } from './helpers/fakewindow.mjs';
 
 test('browser without Web Serial: nothing at all happens', async () => {
 	const { win, calls } = fakeWindow({ serial: false });
