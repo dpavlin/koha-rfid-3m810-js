@@ -142,8 +142,19 @@ test('encodeContent matches encode501 default fields', () => {
 });
 
 test('blank tag payloads', () => {
-	assert.equal(hex(blankTag()), '00'.repeat(12));
-	assert.equal(hex(blank3M()), '55555555'.repeat(6) + '00000000');
+	assert.equal(hex(blankTag()), '00'.repeat(32), 'the whole 8-block image');
+	assert.equal(hex(blank3M()), '55555555'.repeat(6) + '00000000'.repeat(2));
+});
+
+test('blanking a written tag also clears the tail of the old barcode', async () => {
+	// A real 810, blanking a tag that held "1309999999", left block 3 as 39390000
+	// when the payload was 12 bytes: the leftover '99' of the barcode, i.e. a tag
+	// that is neither written nor empty. The payload must span all 8 blocks.
+	const p = new Recording();
+	await p.program([{ sid: 'e004010031269117', content: 'blank' }]);
+	assert.deepEqual(p.calls[0].slice(0, 1), ['blocks']);
+	assert.equal(p.calls[0][2].length / 2, 32);
+	assert.equal(p.calls[0][2], '00'.repeat(32));
 });
 
 test('scan() returns the same JSON as GET /scan/', async () => {

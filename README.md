@@ -88,7 +88,7 @@ GPL-2.0-or-later, inherited from Biblio-RFID via `koha-rfid-go` — see
 ## Using it
 
 ```sh
-make test             # 33 hardware-free JS tests (offline, replays a live capture)
+make test             # 45 hardware-free JS tests (offline, replays a live capture)
 make test-policy      # 29 gate tests, run on the server against this repo's RFID.pm
 make check            # bundle + test + test-policy
 make deploy           # backup on server → perl -c → install → restart plack
@@ -140,6 +140,35 @@ in a row (a USB/IP tunnel that died) it stops rather than retrying forever.
 | `bookPrefix` | `"130"` | prefer these over patron cards when picking which barcode to type |
 | `watch` | `true` | poll the pad; `false` means one scan per page load |
 | `watchIntervalMs` | `600` | poll interval |
+| `programming` | `false` | allow writing to tags at all — the only destructive capability |
+
+### Writing to a tag
+
+Blanking is just programming with the 3M empty-tag pattern (`program(sid,
+"blank")`), so both go through one guard (`src/core/tagwrite.js`), and the guard is
+the point: overwriting the wrong tag destroys an item's findability and nothing
+downstream complains.
+
+1. The tag must be **on the pad right now**. No writing to a remembered or typed-in
+   SID; you cannot mis-position a tag you are holding.
+2. A tag holding something that is not a book barcode (a patron card, anything
+   outside `bookPrefix`) is only overwritten if the caller repeats that exact barcode
+   as `confirm`. A typo does not satisfy it.
+3. The new barcode may not duplicate another tag on the pad — two items with one
+   barcode is a circulation bug that surfaces months later.
+4. 1..16 printable ASCII (the RFID501 field), or `blank` / `3mblank`.
+
+Nothing trusts the writer's own readback either: after `program()` the plugin reads
+the blocks and AFI again and reports what is actually on the tag, which is how the
+inherited 12-byte blank payload got caught — `m0.writes` keeps every attempt with
+`from`, `to`, `afi`, `verified` and the refusal reason.
+
+```js
+await rfidM0.readTag('e00401003123b218')   // afi, raw blocks, decoded 501 fields
+await rfidM0.program('e00401003123b218', '1309999998')
+await rfidM0.program('e00401003123b218', 'blank')
+await rfidM0.program(cardSid, '1309999998', { confirm: '200000000042' })
+```
 
 From the console: `rfidM0.rescan()` re-reads the pad on demand, `rfidM0.watch` holds
 the loop's counters (`polls`, `changes`, `errors`), `rfidM0.log` is everything.
@@ -167,6 +196,13 @@ Things that cost an hour each, in one place:
   `renew.pl`, all of them `name=barcode`. Matching on `name` hits the renew form
   first, and `renew.pl` checks an item in **and issues it straight back out** with a
   new due date — silently. Pick the form by action.
+- **Blanking a written tag needs to clear all 8 blocks.** The 12-byte (3-block)
+  blank payload inherited from the Go client leaves blocks 3-4 alone, so blanking a
+  tag that held `1309999999` left block 3 as `39390000` — the tail of the old
+  barcode, i.e. a tag that is neither written nor empty. The 501 decoder still reads
+  the barcode as blank, so nothing looks wrong until a 3M tool or a client that reads
+  further disagrees. `blankTag()` is 32 bytes now, and `verified` for a blank means
+  the whole image reads empty.
 - **Permission decisions belong to the pages.** returns.pl and circulation.pl
   already check what the logged-in librarian may do; the plugin only decides which
   pages get the script and whether a rollout list narrows it.

@@ -47,6 +47,9 @@ my %DEFAULT_CONFIG = (
     hint        => JSON::XS::true(),
     bookPrefix  => '130',
     debug       => JSON::XS::false(),
+    # Writing to a tag destroys catalogue data if it goes to the wrong tag, so the
+    # capability is off until an installation turns it on (see core/tagwrite.js).
+    programming => JSON::XS::false(),
 );
 
 sub new {
@@ -228,7 +231,7 @@ sub intranet_js {
 
         # Only client-side keys go to the browser — pages/branches/users stay server side.
         my %client_config = map { exists $cfg->{$_} ? ($_ => $cfg->{$_}) : () }
-            qw(hint debug bookPrefix);
+            qw(hint debug bookPrefix programming fillCheckin watch watchIntervalMs);
 
         my $html = sprintf(
             '<script>window.RFID_CONFIG=%s;window.RFID_CONTEXT=%s;</script>',

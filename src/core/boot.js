@@ -41,6 +41,7 @@
  */
 
 import { boot as bootReader, watch } from '../main.js';
+import { programTag, readTag } from './tagwrite.js';
 
 const VERSION = '0.1.0';
 const ARM_KEY = 'rfid_armed';
@@ -54,6 +55,7 @@ export function install(win, { now = () => Date.now() } = {}) {
 		server: win.RFID_CONTEXT || null,
 		config: win.RFID_CONFIG || {},
 		watching: false,
+		writes: [],
 		log: [],
 	};
 	win.rfidM0 = m0;
@@ -321,8 +323,31 @@ export function install(win, { now = () => Date.now() } = {}) {
 		}
 	};
 
+	// --- writing: off unless the installation says otherwise ------------------
+	// Blank is just programming with the 3M empty-tag pattern, so "blanking" a tag
+	// goes through the same guard as writing a barcode onto it.
+	const program = async (sid, content, opts = {}) => {
+		if (!reader) return { error: 'not connected' };
+		if (cfg.programming !== true) return { error: 'tag programming is off for this installation (config: "programming": true)' };
+		const entry = await programTag({ reader, tags: m0.tags || [], sid, content, bookPrefix: cfg.bookPrefix, log: note, ...opts });
+		m0.writes.push(entry);
+		if (!entry.error) {
+			// The SID set did not change, so the watcher would not notice this on its own.
+			const t = (m0.tags || []).find((x) => x.sid.toLowerCase() === String(sid).toLowerCase());
+			if (t) {
+				t.content = entry.content || '';
+				t.security = entry.afi;
+			}
+			pulse();
+		}
+		return entry;
+	};
+
 	m0.scan = scan;
 	m0.rescan = rescan;
+	m0.program = program;
+	m0.readTag = (sid) => (reader ? readTag({ reader, sid }) : Promise.resolve({ error: 'not connected' }));
+	m0.canProgram = cfg.programming === true;
 
 	// --- gate 2: opt-in affordances, and nothing else ------------------------
 	const connected = () => !!transport;

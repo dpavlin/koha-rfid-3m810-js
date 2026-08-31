@@ -115,11 +115,18 @@ export function encode501(o) {
 /** barcode only: item type follows the 3M spec, 130... = Book, else Other */
 export const encodeContent = (content) => encode501({ content });
 
-/** factory-fresh blank tag (3 zero blocks) */
-export const blankTag = () => new Uint8Array(12);
+// A blank has to clear the whole RFID501 image, not just its head. The 12-byte
+// version of this (inherited from the Go client, where it was aimed at tags that
+// were already empty) leaves blocks 3-4 behind: blanking a tag that held
+// "1309999999" on a real 810 left block 3 as 39390000 — the tail of the old
+// barcode, which is exactly the kind of thing that reads as a valid-but-stale tag
+// somewhere else. 32 bytes, every block, every time.
 
-/** 3M blank tag: six blocks of 0x55555555 + one zero block */
-export const blank3M = () => concat([].concat(...Array(6).fill([u32(0x55555555)]), [new Uint8Array(4)]));
+/** blank the whole 8-block image */
+export const blankTag = () => new Uint8Array(32);
+
+/** 3M blank tag: six blocks of 0x55555555, rest cleared */
+export const blank3M = () => concat([...Array.from({ length: 6 }, () => u32(0x55555555)), new Uint8Array(8)]);
 
 // -- reader -----------------------------------------------------------------
 

@@ -11,5 +11,6 @@
 	"users": [],
 	"hint": true,
 	"bookPrefix": "130",
+	"programming": true,
 	"debug": true
 }

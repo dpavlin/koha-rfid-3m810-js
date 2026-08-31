@@ -196,6 +196,9 @@ Proposal — replace the dead F4 notice with the real thing:
 detection ✓ (all three verified against the live reader), deploy scripts ✓, tests ✓.
   Missing: session state machine, explicit Connect UI, circulation/renew page logic.
 - **M2 programming** — moredetail panel + guardrails + write log + placement photo.
+  *Started:* the guard (four rules, `core/tagwrite.js`), the write log (`m0.writes`),
+  `programming` off by default, read-back verification ✓ — all exercised on a real
+  tag. Missing: the UI panel on `moredetail.pl`, and placement photo.
 - **M3 polish** — Perl-side page/branch gating, config JSON, beep, `visibilitychange`,
   CSV export, browser-support + rollout docs, KPZ build for other installations,
   version tags + CHANGELOG.
