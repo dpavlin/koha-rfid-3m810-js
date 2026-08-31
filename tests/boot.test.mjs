@@ -12,8 +12,8 @@ import assert from 'node:assert/strict';
 
 import { install } from '../src/core/boot.js';
 
-function fakeWindow({ serial = false, armed = false, ports = [], search = '' } = {}) {
-	const calls = { listeners: [], createElement: 0, appended: 0 };
+function fakeWindow({ serial = false, armed = false, ports = [], search = '', forms = [] } = {}) {
+	const calls = { listeners: [], createElement: 0, appended: 0, elements: [] };
 	const storage = {};
 	if (armed) storage.rfid_armed = '1';
 
@@ -41,14 +41,15 @@ function fakeWindow({ serial = false, armed = false, ports = [], search = '' } =
 		URLSearchParams,
 		document: {
 			getElementById: () => null,
-			createElement: () => (calls.createElement++, el()),
+			createElement: () => (calls.createElement++, calls.elements.push(el()) && calls.elements.at(-1)),
+			forms,
 			body: { appendChild: () => calls.appended++ },
 		},
 		addEventListener: (type) => calls.listeners.push(type),
 		RFID_CONFIG: {},
 		RFID_CONTEXT: { page: '/intranet/circ/returns.pl', branch: 'FFZG' },
 	};
-	return { win, calls, storage };
+	return { win, calls, storage, elements: calls.elements };
 }
 
 const deadPort = () => ({
@@ -76,11 +77,12 @@ test('browser without Web Serial: nothing at all happens', async () => {
 
 test('Web Serial but never armed: opt-in affordances only, reader untouched', async () => {
 	const port = deadPort();
-	const { win, calls, storage } = fakeWindow({ serial: true, ports: [port] });
+	const { win, calls, storage, elements } = fakeWindow({ serial: true, ports: [port] });
 	const m0 = install(win);
 	await m0.done;
 
 	assert.equal(m0.gate, 'idle');
+	assert.equal(elements[0].textContent, 'RFID \u2014', 'the pill advertises itself without shouting');
 	assert.equal(storage.rfid_armed, undefined, 'stays unarmed');
 	assert.equal(port.opens, 0, 'port never opened');
 	assert.ok(calls.listeners.includes('keydown'), 'Ctrl+Alt+R registered');
@@ -105,6 +107,18 @@ test('?rfid=1 arms this browser, and a remembered port is required before bootin
 
 	assert.equal(storage.rfid_armed, '1', 'armed for later page loads');
 	assert.equal(m0.gate, 'needs-grant', 'asks for one click instead of failing silently');
+});
+
+test('the corner element reports what the reader is doing, including failures', async () => {
+	const { win, elements } = fakeWindow({ serial: true, armed: true, ports: [deadPort()] });
+	const m0 = install(win);
+	await m0.done;
+
+	const pill = elements[0];
+	assert.ok(pill, 'one corner element');
+	assert.equal(pill.textContent, 'RFID !', 'a failed reader is visible, not silent');
+	assert.match(pill.title, /no device attached/, 'the reason is in the tooltip');
+	assert.equal(m0.filled, undefined, 'nothing is typed into the page on a failure');
 });
 
 test('?rfid=0 disarms and says so', async () => {

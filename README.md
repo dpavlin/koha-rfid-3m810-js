@@ -88,7 +88,7 @@ GPL-2.0-or-later, inherited from Biblio-RFID via `koha-rfid-go` — see
 ## Using it
 
 ```sh
-make test             # 26 hardware-free JS tests (offline, replays a live capture)
+make test             # 27 hardware-free JS tests (offline, replays a live capture)
 make test-policy      # 29 gate tests, run on the server against this repo's RFID.pm
 make check            # bundle + test + test-policy
 make deploy           # backup on server → perl -c → install → restart plack
@@ -99,7 +99,26 @@ make rollback         # restore the newest backup
 Enrol a workstation: open a circulation page in Chrome, press
 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd> (or append `?rfid=1` once), pick the
 reader in the Chrome dialog. From then on every page load reconnects by itself.
-Same shortcut disconnects.
+Same shortcut, or a click on the pill, disconnects.
+
+### What a librarian sees
+
+The corner element is a status pill, not just a link:
+
+| pill | meaning |
+|---|---|
+| `RFID —` | dormant — no port granted, nothing touched |
+| `RFID ?` | armed, waiting for one click on the device chooser |
+| `RFID ✓ 10.5.0.2 · 3` | connected, and how many tags it can read right now |
+| `RFID !` | connected and failed; the tooltip says why |
+| `RFID ✗` | this browser has no Web Serial |
+
+On `returns.pl` a scan also writes the first book barcode into the check-in box and
+focuses it, so the next keypress is Return. It never submits, never touches the box
+if it already contains something (`checkin filled` / `checkin left alone` in the log
+tells you which), and `"fillCheckin": false` turns it off. Books are preferred over
+the patron card via `bookPrefix`, because a card on the pad is just another
+ten-digit barcode as far as the driver knows.
 
 ## Field notes (ffzg, Koha 18.11 fork, plack)
 
@@ -119,6 +138,11 @@ Things that cost an hour each, in one place:
   Koha uses — both staff pages here call `C4::Auth::haspermission(userenv->{id}, …)`),
   and `flags` is a numeric bitfield, not the modern hashref. Ask Koha with
   `C4::Auth::haspermission`; never unpack `flags` by hand.
+- **The check-in field is not the same field everywhere**: `input#barcode` inside
+  `form#checkin-form` on `returns.pl`, but `#ret_barcode` on `circulation.pl` and
+  `renew.pl`, all of them `name=barcode`. Matching on `name` hits the renew form
+  first, and `renew.pl` checks an item in **and issues it straight back out** with a
+  new due date — silently. Pick the form by action.
 - **Permission decisions belong to the pages.** returns.pl and circulation.pl
   already check what the logged-in librarian may do; the plugin only decides which
   pages get the script and whether a rollout list narrows it.
