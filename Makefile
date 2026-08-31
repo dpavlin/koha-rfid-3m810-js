@@ -1,6 +1,6 @@
 # koha-rfid-3m810-js — 3M 810 RFID from the browser, no local server
 #
-#   make bundle      — esbuild → plugin/Koha/Plugin/Rot13/RFID/koha-rfid.bundle.js
+#   make bundle      — esbuild → plugin/Koha/Plugin/Rot13/RFID/koha-rfid.js
 #   make test        — hardware-free tests (node --test, live capture replay)
 #   make test-policy — gate tests, run on the server against this repo's RFID.pm
 #   make check       — bundle + test + test-policy
@@ -12,7 +12,7 @@
 NODE ?= node
 HOST ?= koha-dev.rot13.org
 INSTANCE ?= ffzg
-BUNDLE := plugin/Koha/Plugin/Rot13/RFID/koha-rfid.bundle.js
+BUNDLE := plugin/Koha/Plugin/Rot13/RFID/koha-rfid.js
 SRCS   := $(shell find src build package.json -type f 2>/dev/null)
 
 .PHONY: bundle test test-policy check deploy rollback log clean help
@@ -44,6 +44,10 @@ rollback:
 
 log:
 	ssh $(HOST) "sudo tail -n 40 /var/log/koha/$(INSTANCE)/plack-error.log 2>/dev/null | grep RFID || sudo grep -rh 'RFID:' /var/log/koha/$(INSTANCE)/intranet-error.log | tail -20"
+
+# what the plugin decides, as it decides it (plack logs to files here, not journald)
+live-log:
+	ssh $(HOST) "sudo tail -f /var/log/koha/$(INSTANCE)/plack-error.log | grep --line-buffered 'RFID'"
 
 clean:
 	rm -f $(BUNDLE) $(BUNDLE).rejected

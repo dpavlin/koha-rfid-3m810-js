@@ -13,7 +13,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
-const out = 'plugin/Koha/Plugin/Rot13/RFID/koha-rfid.bundle.js';
+const out = 'plugin/Koha/Plugin/Rot13/RFID/koha-rfid.js';
 
 const minify = process.env.DEBUG !== '1';
 

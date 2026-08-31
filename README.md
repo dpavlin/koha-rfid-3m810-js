@@ -74,11 +74,15 @@ GPL-2.0-or-later, inherited from Biblio-RFID via `koha-rfid-go` — see
 
 ## Layout
 
+The one name worth knowing: **`koha-rfid.js` is the bundle**, not a source file. It is
+built into the plugin directory and inlined into the page at request time; searching
+`git ls-files` for it is a search that ends in confusion, because there is nothing to
+find — `src/` is the source.
 | Path | What |
 |---|---|
 | `plugin/Koha/Plugin/Rot13/RFID.pm` | hooks, page/branch gating, inlines the bundle |
 | `plugin/…/koha-rfid.json` | pages, branches, users — server side, never shipped whole |
-| `plugin/…/koha-rfid.bundle.js` | **build artifact** from `src/`, gitignored — the only script injected |
+| `plugin/…/koha-rfid.js` | **built, never written by hand** — `make bundle` puts the bundle here and the plugin inlines it; nothing named `koha-rfid.js` exists in git, and this path is gitignored |
 | `src/core/boot.js` | dormant-by-default bootstrap + opt-in (Ctrl+Alt+R, `?rfid=1`) |
 | `src/main.js` | app entry: open port, probe, scan (M1: session + page logic) |
 | `src/driver/rfid3m.js` | 3M 810 protocol (CRC-16/GENIBUS frames, RFID501) |
@@ -88,11 +92,12 @@ GPL-2.0-or-later, inherited from Biblio-RFID via `koha-rfid-go` — see
 ## Using it
 
 ```sh
-make test             # 45 hardware-free JS tests (offline, replays a live capture)
+make test             # 71 hardware-free JS tests (offline, replays a live capture)
 make test-policy      # 29 gate tests, run on the server against this repo's RFID.pm
 make check            # bundle + test + test-policy
 make deploy           # backup on server → perl -c → install → restart plack
 make log              # what the plugin decided, per page load
+make live-log         # the same lines, as they happen
 make rollback         # restore the newest backup
 ```
 

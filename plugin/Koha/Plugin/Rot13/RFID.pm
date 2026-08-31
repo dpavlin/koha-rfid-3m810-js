@@ -222,7 +222,7 @@ sub intranet_js {
             return '';
         }
 
-        my ( $bundle, $err ) = _cached_file( _dir() . 'koha-rfid.bundle.js' );
+        my ( $bundle, $err ) = _cached_file( _dir() . 'koha-rfid.js' );
         if ($err) {
             warn "RFID: page=$page not injected ($err)\n";
             return '';

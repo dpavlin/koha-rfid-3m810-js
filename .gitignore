@@ -1,7 +1,7 @@
 node_modules/
 package-lock.json
 .pi/
-plugin/Koha/Plugin/Rot13/RFID/koha-rfid.bundle.js
+plugin/Koha/Plugin/Rot13/RFID/koha-rfid.js
 *.rejected
 koha-plugin-rfid-*.kpz
 *.swp

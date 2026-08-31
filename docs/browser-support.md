@@ -5,7 +5,7 @@ over [Web Serial](https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_AP
 One file of logic (`rfid3m.js`), one pluggable transport underneath.
 
 ```
-koha-rfid.bundle.js (Koha staff page)   demo.html
+koha-rfid.js (Koha staff page)   demo.html
         \                                  /
         +------ rfid3m.js (protocol) -----+
               |                    |

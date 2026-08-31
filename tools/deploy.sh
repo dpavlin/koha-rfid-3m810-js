@@ -22,7 +22,7 @@ BACKUPS="/var/lib/koha/${INSTANCE}/plugins-backup/rot13-rfid"
 KOHA_USER_OS="${INSTANCE}-koha"
 LOCAL_PLUGIN="plugin/Koha/Plugin/Rot13/RFID.pm"
 LOCAL_DIR="plugin/Koha/Plugin/Rot13/RFID"
-BUNDLE="$LOCAL_DIR/koha-rfid.bundle.js"
+BUNDLE="$LOCAL_DIR/koha-rfid.js"
 
 [ -f "$BUNDLE" ] || { echo "FAIL: $BUNDLE missing — run 'make bundle' first"; exit 1; }
 
@@ -38,7 +38,7 @@ STAGE="/tmp/rfid-deploy.$$"
 ssh "$HOST" "mkdir -p $STAGE"
 scp -q "$LOCAL_PLUGIN" "$HOST:$STAGE/RFID.pm"
 scp -q "$LOCAL_DIR/koha-rfid.json" "$HOST:$STAGE/koha-rfid.json"
-scp -q "$BUNDLE" "$HOST:$STAGE/koha-rfid.bundle.js"
+scp -q "$BUNDLE" "$HOST:$STAGE/koha-rfid.js"
 # This plugin ships exactly one script: the Web Serial bundle. The old Go-server
 # polling client is not deployed from here (it lives in koha-rfid-go, as a plugin
 # with the same class name — see README). Step 5 deletes any copy left behind on
@@ -58,8 +58,10 @@ ssh "$HOST" "
 	sudo mkdir -p '$ASSETS'
 	sudo cp '$STAGE/RFID.pm' '$PLUGPM'
 	sudo cp '$STAGE/koha-rfid.json' '$ASSETS/koha-rfid.json'
-	sudo cp '$STAGE/koha-rfid.bundle.js' '$ASSETS/koha-rfid.bundle.js'
-	sudo rm -f '$ASSETS/koha-rfid.js'   # old Go-server client: not ours to ship
+	sudo cp '$STAGE/koha-rfid.js' '$ASSETS/koha-rfid.js'
+	# The bundle used to be called koha-rfid.bundle.js. Remove it: an unused script
+	# with a similar name is how a deploy gets blamed for the wrong file.
+	sudo rm -f '$ASSETS/koha-rfid.bundle.js'
 	sudo chown -R $KOHA_USER_OS:$KOHA_USER_OS '$PLUGDIR'
 	sudo rm -rf '$STAGE'
 	# systemctl restart koha-plack is a no-op on this box (LSB unit reports
