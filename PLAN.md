@@ -85,12 +85,22 @@ boot ─→ dormant            no navigator.serial, or not armed → NOTHING hap
   (stat-cache it), passed to the bundle as a JSON literal:
   ```json
   { "pages": ["circ/returns.pl", "circ/circulation.pl", "circ/circulation-home.pl",
-              "circ/renew.pl", "catalogue/moredetail.pl"],
-    "branches": ["FFZG"],  "users": [],  "bookPrefix": "130",
-    "beep": true, "debug": false }
+              "circ/renew.pl", "catalogue/moredetail.pl", "mainpage.pl"],
+    "branches": [],  "users": [],  "bookPrefix": "130",
+    "hint": true,        "debug": true,        "programming": true,
+    "autoCheckin": true, "checkinTtl": 60,     "toasts": true,
+    "fillCheckin": true, "watch": true, "watchIntervalMs": 600,
+    "pauseWatchWhenHidden": true }
   ```
-- Per-browser state in `localStorage`: `rfid_armed`, `rfid_afi`, `rfid_writes`.
-- No syspref, no DB writes, no admin page needed to run it.
+  The file in this repo is the **development** one, with `debug`, `programming` and
+  `autoCheckin` on to make hardware testing possible. `programming` (writing to tags)
+  and `autoCheckin` (posting without anyone pressing Return) are the two that need a
+  conscious decision per installation; both default to off in the code.
+- Per-browser state in `localStorage`: `rfid_armed` (this desk has a reader and may
+  talk to it), `rfid_keepwatching` (`?rfid=keep`). Per-tab in `sessionStorage`:
+  `rfid_checkin` (what is in flight, so the answer survives the reload it causes).
+- No syspref, no DB writes, no admin page needed to run it. There is no per-user
+  preference layer yet — see §9.6, parked for the end.
 
 ## 5. Do not bother the ~90% of staff who have no reader
 
@@ -229,3 +239,20 @@ detection ✓ (all three verified against the live reader), deploy scripts ✓, 
 4. Is the 2012 `moredetail.tt` patch going to stay patched in-tree, or should the new
    plugin *replace* it by hiding those notices from JS (it can, with a CSS/JS override)?
 5. `Ctrl+Alt+R` acceptable as the one memorable shortcut (and keep `F4` for programming)?
+6. **Per-user or per-browser configuration.** Today a setting has exactly two homes:
+   `RFID/koha-rfid.json`, which is the same for the installation and needs a deploy to
+   change; and a URL parameter that writes a `localStorage` key (`?rfid=keep`,
+   `?rfid=1`), which is per browser and needs knowing the URL. Nothing in between — so
+   "this librarian wants no toasts", "this desk polls slower", "keep watching even when
+   hidden" have no honest place, and `?rfid=keep` stays URL-only by decision until this
+   is settled. To brainstorm at the end, roughly in this order:
+   - Which keys are preferences at all, and which must stay server-side because they
+     are permissions (`programming`) or enrolment (`pages`, `branches`, `users`).
+   - Is server config the *ceiling* (a librarian may turn something off but never on)
+     or the *default* (librarian may override either way)? The answer differs per key,
+     which is the argument for naming that column rather than inventing a flag per key.
+   - Where does it live: `localStorage` (per browser, survives logout, wrong when two
+     librarians share a workstation), `sessionStorage` (per shift), or Koha (per user,
+     survives everything, needs a route and a write — the thing §4 exists to avoid).
+   - How it is changed without a URL and without an admin page — and whether the answer
+     is the status pill's context menu, or nothing at all for v1.
