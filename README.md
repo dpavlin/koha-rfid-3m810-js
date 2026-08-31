@@ -88,7 +88,7 @@ GPL-2.0-or-later, inherited from Biblio-RFID via `koha-rfid-go` — see
 ## Using it
 
 ```sh
-make test             # 27 hardware-free JS tests (offline, replays a live capture)
+make test             # 33 hardware-free JS tests (offline, replays a live capture)
 make test-policy      # 29 gate tests, run on the server against this repo's RFID.pm
 make check            # bundle + test + test-policy
 make deploy           # backup on server → perl -c → install → restart plack
@@ -119,6 +119,30 @@ if it already contains something (`checkin filled` / `checkin left alone` in the
 tells you which), and `"fillCheckin": false` turns it off. Books are preferred over
 the patron card via `bookPrefix`, because a card on the pad is just another
 ten-digit barcode as far as the driver knows.
+
+### Watching the pad
+
+While connected, the reader is polled with `inventory()` every 600 ms — one command,
+a few tens of milliseconds — and a full `scan()` (AFI + blocks, ~60 ms per tag) runs
+only when the set of tags on the pad actually changed. Put a second item down and the
+pill flashes and counts 4 within half a second; take one away and it counts 3. If the
+check-in box holds a barcode that is no longer on the pad, whatever it referred to has
+been dealt with, so a tag that *is* on the pad takes its place; a barcode still under
+the antenna is never overwritten.
+
+The poll stops when the tab is hidden and when the page unloads, so an open tab does
+not hold the port against the 3M desktop tool or a CLI — and after three read failures
+in a row (a USB/IP tunnel that died) it stops rather than retrying forever.
+
+| config key | default | effect |
+|---|---|---|
+| `fillCheckin` | `true` | write scanned barcodes into the check-in box |
+| `bookPrefix` | `"130"` | prefer these over patron cards when picking which barcode to type |
+| `watch` | `true` | poll the pad; `false` means one scan per page load |
+| `watchIntervalMs` | `600` | poll interval |
+
+From the console: `rfidM0.rescan()` re-reads the pad on demand, `rfidM0.watch` holds
+the loop's counters (`polls`, `changes`, `errors`), `rfidM0.log` is everything.
 
 ## Field notes (ffzg, Koha 18.11 fork, plack)
 

@@ -192,6 +192,9 @@ Proposal — replace the dead F4 notice with the real thing:
 - **M1 core** — bootstrap + session state machine + status dot/toast + Connect,
   scan path for returns/circulation/renew with page logic moved verbatim,
   deploy scripts, driver capture-replay tests, README.
+  *Partly done:* status pill ✓, check-in autofill ✓, pad watching with appear/disappear
+detection ✓ (all three verified against the live reader), deploy scripts ✓, tests ✓.
+  Missing: session state machine, explicit Connect UI, circulation/renew page logic.
 - **M2 programming** — moredetail panel + guardrails + write log + placement photo.
 - **M3 polish** — Perl-side page/branch gating, config JSON, beep, `visibilitychange`,
   CSV export, browser-support + rollout docs, KPZ build for other installations,

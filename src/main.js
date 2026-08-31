@@ -8,10 +8,9 @@
  * version. See LICENSE in the repository root.
  *
  * M0 spike scope: open the granted port, wake the reader, do one inventory.
- * M1 replaces the inside of this file with the session state machine, the scan
- * loop and the toast/status UI. The old Go-server client is the behaviour spec,
- * not something to port: no code here talks to localhost:9000. Everything above
- * this line stays the same either way.
+ * watch() adds the second half of a real workstation loop: notice tags being put
+ * down and taken away. The old Go-server client is the behaviour spec, not
+ * something to port: no code here talks to localhost:9000.
  */
 
 import { Reader3M } from './driver/rfid3m.js';
@@ -37,4 +36,125 @@ export async function boot({ port, log = () => {} }) {
 		}
 	}
 	return { out, reader: r, transport: r ? t : null };
+}
+
+/*
+ * Watch the pad so a tag placed later is noticed without reloading the page.
+ *
+ * inventory() is a single command (a few tens of ms, even over usbip); scan() reads
+ * AFI and blocks for every tag, roughly 60 ms per tag. So poll inventory and pay
+ * for a full scan only when the set of tags actually changed. Reader3M serialises
+ * commands, so a scan here can never interleave frames with the app's own reads.
+ *
+ * It gives up by itself after `maxErrors` consecutive read failures — a reader on a
+ * USB/IP tunnel disappears more often than a reader on a desk — and the caller owns
+ * start/stop (page visibility, disconnect, pagehide).
+ */
+export function watch({
+	reader,
+	initial = [],
+	intervalMs = 600,
+	maxErrors = 3,
+	onChange = () => {},
+	onError = () => {},
+	onStop = () => {},
+	now = () => Date.now(),
+} = {}) {
+	const stats = {
+		on: false,
+		polls: 0,
+		changes: 0,
+		errors: 0,
+		scanning: false,
+		startedAt: null,
+		stoppedAt: null,
+		stopReason: null,
+	};
+	let stopped = true;
+	let timer = null;
+	let failing = 0;
+	let seen = new Map(initial.map(({ sid, content }) => [sid, content]));
+
+	const sig = (list) => list.slice().sort().join(',');
+
+	const finish = (why) => {
+		if (!stats.on) return stats; // already stopped: onStop must fire once
+		stopped = true;
+		if (timer) clearTimeout(timer);
+		timer = null;
+		stats.on = false;
+		stats.stoppedAt = now();
+		stats.stopReason = why;
+		onStop(why);
+		return stats;
+	};
+
+	const again = () => {
+		if (!stopped) timer = setTimeout(tick, intervalMs);
+	};
+
+	const bump = (e) => {
+		if (stopped) return undefined; // disconnected mid-read: not an error worth logging
+		stats.errors++;
+		failing++;
+		onError(String((e && e.message) || e), failing);
+		if (failing >= maxErrors) return finish(`gave up after ${failing} read failures`);
+		again();
+		return undefined;
+	};
+
+	async function tick() {
+		if (stopped) return;
+		let sids;
+		try {
+			sids = await reader.inventory();
+		} catch (e) {
+			return bump(e);
+		}
+		stats.polls++;
+		failing = 0;
+
+		if (sig(sids) === sig([...seen.keys()])) return again();
+
+		stats.scanning = true;
+		let tags;
+		try {
+			({ tags } = await reader.scan());
+		} catch (e) {
+			stats.scanning = false;
+			return bump(e);
+		}
+		stats.scanning = false;
+
+		const next = new Map(tags.map((t) => [t.sid, t.content]));
+		const added = tags.filter((t) => !seen.has(t.sid));
+		const removed = [...seen.keys()]
+			.filter((sid) => !next.has(sid))
+			.map((sid) => ({ sid, content: seen.get(sid) }));
+		seen = next;
+		stats.changes++;
+
+		try {
+			await onChange({ tags, added, removed });
+		} catch (e) {
+			stats.errors++;
+			onError(`onChange: ${String((e && e.message) || e)}`, 0);
+		}
+		again();
+	}
+
+	return {
+		start() {
+			if (stats.on) return stats;
+			stopped = false;
+			failing = 0;
+			stats.on = true;
+			stats.startedAt = now();
+			stats.stopReason = null;
+			tick();
+			return stats;
+		},
+		stop: finish,
+		stats,
+	};
 }

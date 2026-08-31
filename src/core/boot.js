@@ -23,6 +23,12 @@
  * librarian already typed. A reader that works but is invisible is indistinguishable
  * from a reader that is not installed.
  *
+ * While connected the pad is watched: a tag put down (or taken away) after the page
+ * loaded is noticed within about half a second, the pill flashes, and a check-in box
+ * whose barcode has left the pad is refilled from what is on it now. Polling stops
+ * when the tab is hidden and when the page goes away, so an open tab never holds the
+ * port hostage from the 3M tool or a CLI.
+ *
  * A granted port is remembered by Chrome for this origin, so step 3 costs no user
  * interaction from then on: getPorts() + open() need no gesture, requestPort() does.
  *
@@ -34,7 +40,7 @@
  * are testable in plain node (tests/boot.test.mjs).
  */
 
-import { boot as bootReader } from '../main.js';
+import { boot as bootReader, watch } from '../main.js';
 
 const VERSION = '0.1.0';
 const ARM_KEY = 'rfid_armed';
@@ -47,6 +53,7 @@ export function install(win, { now = () => Date.now() } = {}) {
 		gate: 'dormant',
 		server: win.RFID_CONTEXT || null,
 		config: win.RFID_CONFIG || {},
+		watching: false,
 		log: [],
 	};
 	win.rfidM0 = m0;
@@ -134,15 +141,35 @@ export function install(win, { now = () => Date.now() } = {}) {
 			} else if (m0.gate === 'disarmed') {
 				title = 'RFID reader: disarmed (click to connect)';
 			}
+			const flashing = m0.pulseUntil && now() < m0.pulseUntil;
 			hint.textContent = text;
-			hint.title = `${title} — click, or Ctrl+Alt+R`;
-			hint.style.cssText = `${PILL_BASE};${css}`;
+			hint.title = `${title}${m0.watching ? ' (watching)' : ''} — click, or Ctrl+Alt+R`;
+			hint.style.cssText = `${PILL_BASE};${css}${flashing ? ';background:#fff3b0;opacity:1' : ''}`;
 		});
+
+	// Brief highlight when the pad changes: a librarian who is looking at the
+	// screen, not at the reader, should still notice that something changed.
+	let pulseTimer = null;
+	const pulse = () => {
+		m0.pulseUntil = now() + 1200;
+		paint();
+		if (pulseTimer) safe('clear pulse', () => clearTimeout(pulseTimer));
+		pulseTimer = safe('pulse timer', () =>
+			setTimeout(() => {
+				m0.pulseUntil = 0;
+				paint();
+			}, 1300),
+		);
+	};
 
 	// M1's first slice of page logic, deliberately small: put a scanned barcode in
 	// the check-in box and let the librarian press Return. Books first, because a
 	// patron card on the pad is just another 10-digit barcode as far as we know.
-	const fillCheckin = () =>
+	//
+	// `replaceStale` is what makes watching useful: once the barcode in the box is
+	// no longer on the pad, whatever it referred to has been dealt with, so a tag
+	// that is on the pad should take its place.
+	const fillCheckin = ({ replaceStale = false } = {}) =>
 		safe('fill checkin', () => {
 			if (cfg.fillCheckin === false || !win.document || !win.document.forms) return;
 			const seen = (m0.tags || []).filter((t) => t.content);
@@ -151,10 +178,14 @@ export function install(win, { now = () => Date.now() } = {}) {
 			if (!form || !form.elements || !form.elements['barcode']) return;
 			const field = form.elements['barcode'];
 			if (field.value) {
-				note('checkin left alone', `field already holds "${field.value}"`);
-				return;
+				const onPad = seen.some((t) => t.content === field.value);
+				if (onPad || !replaceStale) {
+					note('checkin left alone', `field holds "${field.value}"${onPad ? ' (still on the pad)' : ''}`);
+					return;
+				}
 			}
 			const pick = (cfg.bookPrefix && seen.find((t) => t.content.startsWith(cfg.bookPrefix))) || seen[0];
+			if (pick.content === field.value) return;
 			field.value = pick.content;
 			m0.filled = pick.content;
 			safe('focus', () => field.focus && field.focus());
@@ -170,7 +201,10 @@ export function install(win, { now = () => Date.now() } = {}) {
 		m0.gate = out.error ? 'error' : 'ready';
 		note('gate', m0.gate);
 		paint();
-		if (m0.gate === 'ready') fillCheckin();
+		if (m0.gate === 'ready') {
+			fillCheckin();
+			startWatch();
+		}
 		return m0;
 	};
 
@@ -194,6 +228,7 @@ export function install(win, { now = () => Date.now() } = {}) {
 	};
 
 	const stop = async () => {
+		stopWatch('disconnected');
 		setArmed(false);
 		m0.gate = 'disarmed';
 		paint();
@@ -215,7 +250,79 @@ export function install(win, { now = () => Date.now() } = {}) {
 
 	m0.connect = connect;
 	m0.stop = stop;
+	// --- watching: a tag put down later must not need a page reload ----------
+	let pad = null;
+
+	const stopWatch = (why) => {
+		if (!pad) return;
+		safe('watch stop', () => pad.stop(why));
+		pad = null;
+		m0.watching = false;
+	};
+
+	const startWatch = () => {
+		if (cfg.watch === false || !reader || pad) return;
+		const every = cfg.watchIntervalMs || 600;
+		pad = watch({
+			reader,
+			initial: m0.tags || [],
+			intervalMs: every,
+			onChange: ({ tags, added, removed }) => {
+				m0.tags = tags.map(({ sid, content, security, tag_type }) => ({ sid, content, security, tag_type }));
+				const names = (list) => list.map((t) => t.content || t.sid).join(' ');
+				note(
+					'pad changed',
+					`${added.length ? `+${names(added)} ` : ''}${removed.length ? `-${names(removed)}` : ''}`.trim() +
+						` (${m0.tags.length} on the pad)`,
+				);
+				pulse();
+				fillCheckin({ replaceStale: true });
+			},
+			onError: (msg, n) => note(n ? `watch error #${n}` : 'watch error', msg),
+			onStop: (why) => {
+				m0.watching = false;
+				note('watch stopped', why);
+				paint();
+			},
+		});
+		pad.start();
+		m0.watching = true;
+		m0.watch = pad.stats;
+		note('watching the pad', `inventory every ${every} ms`);
+		paint();
+
+		// A hidden tab nobody is looking at does not need to hold the port, and a
+		// page that is going away must not leave it open behind the next one.
+		safe('watch listeners', () => {
+			const d = win.document;
+			if (!pad || !d) return;
+			if (d.addEventListener)
+				d.addEventListener('visibilitychange', () => {
+					if (!pad) return;
+					if (d.hidden) pad.stop('tab hidden');
+					else if (!pad.stats.on) { pad.start(); m0.watching = true; note('watch resumed'); paint(); }
+				});
+			win.addEventListener('pagehide', () => stopWatch('page hiding'));
+		});
+	};
+
+	// Manual re-scan, for the moment a librarian is not sure the pad was read.
+	const rescan = async () => {
+		if (!reader) return { error: 'not connected' };
+		try {
+			const { tags } = await reader.scan();
+			m0.tags = tags.map(({ sid, content, security, tag_type }) => ({ sid, content, security, tag_type }));
+			note('rescan', `${m0.tags.length} tag(s) on the pad`);
+			pulse();
+			fillCheckin({ replaceStale: true });
+			return { tags: m0.tags };
+		} catch (e) {
+			return { error: String((e && e.message) || e) };
+		}
+	};
+
 	m0.scan = scan;
+	m0.rescan = rescan;
 
 	// --- gate 2: opt-in affordances, and nothing else ------------------------
 	const connected = () => !!transport;
