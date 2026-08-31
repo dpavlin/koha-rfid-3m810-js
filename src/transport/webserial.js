@@ -23,6 +23,8 @@
  * parsed across read boundaries and nothing is lost between commands.
  */
 
+const msg = (e) => String((e && e.message) || e);
+
 export class SerialTransport {
 	static BAUD = 19200;
 
@@ -51,8 +53,29 @@ export class SerialTransport {
 		this.reader = null;
 	}
 
-	async open() {
-		if (!this.port.readable) await this.port.open({ baudRate: this.baud });
+	/*
+	 * Opening races the page before this one. A reload releases the port in the old
+	 * document while the new document is already asking for it, and Chrome answers
+	 * "Failed to open serial port" with no hint that it is a momentary thing — which
+	 * reaches the librarian as a red RFID pill on a workstation that worked a second
+	 * ago. Retrying an open costs nothing and has no side effects, so retry it.
+	 */
+	async open({ attempts = 3, backoffMs = 250 } = {}) {
+		if (!this.port.readable) {
+			let last = null;
+			for (let i = 0; i < attempts; i++) {
+				try {
+					await this.port.open({ baudRate: this.baud });
+					last = null;
+					break;
+				} catch (e) {
+					last = e;
+					if (i + 1 < attempts) this.log('open retry', `${i + 1}/${attempts}: ${msg(e)}`);
+					await new Promise((r) => setTimeout(r, backoffMs * (i + 1)));
+				}
+			}
+			if (last) throw last;
+		}
 		this.abort = new AbortController();
 		this.reading = this._drain(this.abort.signal);
 	}
@@ -133,7 +156,10 @@ export class SerialTransport {
 				await this.port.close();
 				break;
 			} catch (e) {
-				this.log('~~', 'close retry: ' + String(e && e.message ? e.message : e));
+				// "The port is already closed" is the state we were trying to reach, so it
+				// is not a reason to try three more times and fill the log with failures.
+				if (/closed/i.test(msg(e))) break;
+				this.log('~~', 'close retry: ' + msg(e));
 				await new Promise((r) => setTimeout(r, 200));
 			}
 		}

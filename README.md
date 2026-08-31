@@ -113,6 +113,12 @@ The corner element is a status pill, not just a link:
 | `RFID !` | connected and failed; the tooltip says why |
 | `RFID ✗` | this browser has no Web Serial |
 
+A check-in that worked says so in the corner for four seconds — barcode, not title,
+because the title is already on the page and the barcode is what the librarian just
+scanned. Nothing else does: not a sound, not a beep, nothing that competes with a desk
+full of patrons. A check-in that Koha refused says nothing, because Koha has already
+put its answer where the librarian is looking.
+
 On `returns.pl` a scan also writes the first book barcode into the check-in box and
 focuses it, so the next keypress is Return. It never submits, never touches the box
 if it already contains something (`checkin filled` / `checkin left alone` in the log
@@ -130,9 +136,15 @@ check-in box holds a barcode that is no longer on the pad, whatever it referred 
 been dealt with, so a tag that *is* on the pad takes its place; a barcode still under
 the antenna is never overwritten.
 
-The poll stops when the tab is hidden and when the page unloads, so an open tab does
-not hold the port against the 3M desktop tool or a CLI — and after three read failures
-in a row (a USB/IP tunnel that died) it stops rather than retrying forever.
+Polling pauses while the tab is not in front and stops when the page unloads: a
+check-in that fires on a page nobody is looking at is a surprise, and a toast nobody
+sees is not feedback. Pause is not release — the tab keeps the port, because two tabs
+fighting over one reader is worse than one idle holder; `rfidM0.stop()` is how you hand
+it to a CLI. Note that Chrome also reports a window *covered by another application*
+as hidden, so a workstation that keeps Koha behind a spreadsheet can opt out with
+`?rfid=keep` (per browser) or `pauseWatchWhenHidden: false` (per installation). The
+pill's tooltip says `watch paused (tab hidden)` when this is why nothing happens.
+After three read failures in a row it stops by itself rather than retrying forever.
 
 | config key | default | effect |
 |---|---|---|
@@ -140,7 +152,35 @@ in a row (a USB/IP tunnel that died) it stops rather than retrying forever.
 | `bookPrefix` | `"130"` | prefer these over patron cards when picking which barcode to type |
 | `watch` | `true` | poll the pad; `false` means one scan per page load |
 | `watchIntervalMs` | `600` | poll interval |
+| `autoCheckin` | `false` | post the check-in when a book appears on the pad; `false` fills the box and waits for Return |
+| `checkinTtl` | `60` | seconds a checked-in barcode stays "already done", so a tag left on the pad is not offered again immediately |
 | `programming` | `false` | allow writing to tags at all — the only destructive capability |
+| `pauseWatchWhenHidden` | `true` | pause polling while the tab is not in front |
+
+### Checking items in without anyone pressing Return
+
+`returns.pl` has no API: you post a barcode and it answers with a whole new page. So
+this is a state machine that survives a reload (`src/core/checkin.js`, state in
+`sessionStorage` — it dies with the tab, so a check-in is never reported to the next
+shift), and the property it exists to guarantee is not *it posts* but **it never posts
+twice**: a check-in you cannot confirm is a check-in that also lands on the next loan
+of that item. One barcode is in flight at a time; a barcode that comes back off the
+pad is forgotten, so putting the next item down is not blocked.
+
+Whether it worked is decided by one thing — does the page's checked-in table contain a
+*row for this barcode with a date in the due-date column*. A return leaves a date; a
+refusal leaves words: "Not checked out", "Item on hold", wording that changes between
+Koha versions. Both cases are captured in `tests/fixtures/checkedin-*.html`, and the
+refusal is the bug those fixtures exist to keep dead: the refused row carries the same
+title and the same barcode as the real one, so matching the table for the barcode
+believes Koha's own error message.
+
+Failures are not repeated to the librarian — Koha renders its own error on the page
+that just reloaded, in context, with the patron and title beside it. A success gets a
+quiet toast; everything goes to `rfidM0.log` and the pill's tooltip. And the direction
+of the one uncertainty is deliberate: if Koha renames its table, check-ins that worked
+get reported as unconfirmed (nothing is reposted, a human sees the page) rather than
+the other way round.
 
 ### Writing to a tag
 
@@ -174,6 +214,12 @@ From the console: `rfidM0.rescan()` re-reads the pad on demand, `rfidM0.watch` h
 the loop's counters (`polls`, `changes`, `errors`), `rfidM0.log` is everything.
 
 ## Field notes (ffzg, Koha 18.11 fork, plack)
+
+Development happens away from the reader, over a hand-made USB/IP tunnel; when it
+drops, everything below looks like a broken reader. [docs/usbip-reader.md](docs/usbip-reader.md)
+has the attach commands and the "is it the tunnel, the browser, or the reader" table.
+The rule that catches people out twice: **one holder per reader** — a second staff tab
+loses the port and says so, and Chrome's own wording is useless.
 
 Things that cost an hour each, in one place:
 
@@ -220,4 +266,5 @@ Things that cost an hour each, in one place:
 
 Chrome/Edge desktop only in practice. Firefox 151+ works but managed installs are
 blocked by policy since 152; Safari has no Web Serial. Unsupported browsers get
-no UI at all. See [docs/browser-support.md](docs/browser-support.md).
+no UI at all. See [docs/browser-support.md](docs/browser-support.md) (and
+[docs/usbip-reader.md](docs/usbip-reader.md) for the test rig).

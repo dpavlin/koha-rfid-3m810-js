@@ -30,24 +30,56 @@
 const KEY = 'rfid_checkin';
 const text = (el) => (el && (el.textContent || el.innerText) || '').replace(/\s+/g, ' ').trim();
 
-/** Did this page come back having checked `barcode` in? `confirmed` is the text of
- *  the region that lists what the post did (returns.pl: the checked-in table). */
-export function classify({ barcode = null, confirmed = '' } = {}) {
-	const ok = !!barcode && confirmed.includes(barcode);
+/*
+ * A return leaves a date behind; a refusal leaves words. That is the whole
+ * discriminator, and it is what makes this survive a Koha upgrade: "Not checked
+ * out.", "Item not checked out to this borrower", "Check in complete" — whatever the
+ * wording, a row that did not return anything has nothing that looks like a date in
+ * the due-date column, and a row that did has one. Both rows were captured from the
+ * live server, in tests/fixtures/checkedin-*.html:
+ *
+ *   returned    <td class="ci-duedate">2027-03-06 23:59</td>
+ *   refused     <td class="ci-duedate">Not checked out</td>
+ *
+ * The barcode column is identical in both, which is the trap: matching the table
+ * text for the barcode believes Koha's own error message. It is also the safe
+ * direction to be wrong in — see the header.
+ */
+const DATEISH = /\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}/;
+
+/** Did this page come back having checked `barcode` in? */
+export function classify({ barcode = null, returned = [] } = {}) {
+	const ok = !!barcode && returned.some((b) => b === barcode);
 	return { ok, detail: ok ? barcode : 'not confirmed' };
 }
 
 /**
- * The returns.pl adapter. One selector decides the verdict: the table of items this
- * page checked in. The notices are collected for the log only — a failed check-in is
- * Koha's message to read, not ours to repeat, so nothing here decides anything based
- * on them, and if those class names ever change all that is lost is detail in a log.
+ * The returns.pl adapter: which barcodes does this page say it checked in?
+ *
+ * Cells are read by their `ci-*` class where the template has them (falls back to
+ * the row's own text where it doesn't, so an older or newer template still works,
+ * just less precisely). The notices are collected for the log only — a refusal is
+ * Koha's message to read, not ours to repeat — so nothing here decides anything
+ * based on them, and if those class names change all that is lost is detail in a log.
  */
 export function readCheckinResult(doc) {
-	if (!doc || !doc.querySelector) return { confirmed: '', messages: [] };
+	const rows = doc && doc.querySelectorAll ? [...doc.querySelectorAll('table#checkedintable tbody tr')] : [];
+	const returned = [];
+	for (const row of rows) {
+		const cell = (cls) => (row.querySelector ? text(row.querySelector('td.' + cls)) : '');
+		const has = (cls) => !!(row.querySelector && row.querySelector('td.' + cls));
+		// Without the ci-* hooks there is nothing better than a barcode-shaped token in
+		// the row. Less precise, which is why the cell class is worth keeping an eye on.
+		const barcode = has('ci-barcode') ? cell('ci-barcode') : (text(row).match(/\b\d{5,14}\b/) || [''])[0];
+		const due = has('ci-duedate') ? cell('ci-duedate') : text(row);
+		if (barcode && DATEISH.test(due)) returned.push(barcode);
+	}
 	return {
-		confirmed: text(doc.querySelector('table#checkedintable')),
-		messages: [...(doc.querySelectorAll('.dialog.alert, .dialog.message') || [])].map(text).filter(Boolean),
+		returned,
+		messages:
+			doc && doc.querySelectorAll
+				? [...(doc.querySelectorAll('.dialog.alert, .dialog.message') || [])].map(text).filter(Boolean)
+				: [],
 	};
 }
 

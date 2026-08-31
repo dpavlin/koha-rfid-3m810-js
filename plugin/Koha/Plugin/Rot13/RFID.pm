@@ -54,6 +54,10 @@ my %DEFAULT_CONFIG = (
     # unexpected one is worse than none: off until a workstation asks for it.
     autoCheckin     => JSON::XS::false(),
     checkinTtl      => 60,        # seconds a checked-in barcode stays "already done"
+    # The pad is not polled while the tab is not in front (Chrome also calls a window
+    # that another application covers "hidden"). One workstation can override this
+    # with ?rfid=keep; turn it off for all of them here.
+    pauseWatchWhenHidden => JSON::XS::true(),
 );
 
 sub new {
@@ -236,7 +240,7 @@ sub intranet_js {
         # Only client-side keys go to the browser — pages/branches/users stay server side.
         my %client_config = map { exists $cfg->{$_} ? ($_ => $cfg->{$_}) : () }
             qw(hint debug bookPrefix programming fillCheckin watch watchIntervalMs
-                autoCheckin checkinTtl toasts);
+                autoCheckin checkinTtl toasts pauseWatchWhenHidden);
 
         my $html = sprintf(
             '<script>window.RFID_CONFIG=%s;window.RFID_CONTEXT=%s;</script>',

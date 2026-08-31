@@ -29,6 +29,12 @@ export async function boot({ port, log = () => {} }) {
 		out.tags = tags.map(({ sid, content, security, tag_type }) => ({ sid, content, security, tag_type }));
 	} catch (e) {
 		out.error = String((e && e.message) || e);
+		// Chrome says "Failed to open serial port" and stops there. On a workstation
+		// with the staff client open in two tabs — which is how the staff client is
+		// used — that is the whole story: the other tab has the reader, and every
+		// reload of this one will fail until it lets go. Say the useful part.
+		if (/open/i.test(out.error) && /serial port/i.test(out.error))
+			out.error += ' — another tab or window may be holding the reader';
 		try {
 			await t.close();
 		} catch {

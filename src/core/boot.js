@@ -47,6 +47,7 @@ import { toasts } from './toast.js';
 
 const VERSION = '0.1.0';
 const ARM_KEY = 'rfid_armed';
+const KEEP_KEY = 'rfid_keepwatching';
 const HINT_ID = 'rfid-boot-hint';
 
 export function install(win, { now = () => Date.now() } = {}) {
@@ -92,6 +93,17 @@ export function install(win, { now = () => Date.now() } = {}) {
 	const cfg = m0.config;
 	const isArmed = () => store.get(ARM_KEY) === '1';
 	const setArmed = (on) => (on ? store.set(ARM_KEY, '1') : store.del(ARM_KEY));
+
+	// Whether to keep polling the pad when the tab is not in front. Default: don't — a
+	// check-in that fires on a page nobody is looking at is a surprise, and a toast
+	// nobody sees is not feedback.
+	//
+	// The catch is that Chrome also reports `hidden` when another application covers
+	// the window, so a workstation that keeps Koha behind a spreadsheet would see the
+	// reader go dead. That machine opts out with ?rfid=keep, or the installation does
+	// with pauseWatchWhenHidden: false. Serial itself never needed the focus — this is
+	// a decision about when the plugin is allowed to act on the page.
+	const idleWhenHidden = () => !(cfg.pauseWatchWhenHidden === false || store.get(KEEP_KEY) === '1');
 
 	// Ports are reached through the injected window, never the global navigator,
 	// so the dormancy rules stay testable in plain node (tests/boot.test.mjs).
@@ -146,6 +158,7 @@ export function install(win, { now = () => Date.now() } = {}) {
 				title = 'RFID reader: disarmed (click to connect)';
 			}
 			if (m0.lastOutcome) title += `; last check-in ${m0.lastOutcome.barcode} ${m0.lastOutcome.ok ? 'ok' : 'not confirmed'}`;
+			if (!m0.watching && m0.paused) title += `; watch paused (${m0.paused})`;
 			const flashing = m0.pulseUntil && now() < m0.pulseUntil;
 			hint.textContent = text;
 			hint.title = `${title}${m0.watching ? ' (watching)' : ''} — click, or Ctrl+Alt+R`;
@@ -306,8 +319,12 @@ export function install(win, { now = () => Date.now() } = {}) {
 		}
 	};
 
+	// The surface a human types at. `inventory` is the cheap look at the pad (one
+	// command, no EPC memory read) and `stop` hands the port back — the CLI cannot
+	// open it while a browser tab is holding it.
 	m0.connect = connect;
 	m0.stop = stop;
+	m0.inventory = () => (reader ? reader.inventory() : Promise.resolve(null));
 	// --- watching: a tag put down later must not need a page reload ----------
 	let pad = null;
 
@@ -342,27 +359,35 @@ export function install(win, { now = () => Date.now() } = {}) {
 			onError: (msg, n) => note(n ? `watch error #${n}` : 'watch error', msg),
 			onStop: (why) => {
 				m0.watching = false;
+				m0.paused = why;
 				note('watch stopped', why);
 				paint();
 			},
 		});
 		pad.start();
 		m0.watching = true;
+		m0.paused = null;
 		m0.watch = pad.stats;
 		note('watching the pad', `inventory every ${every} ms`);
 		paint();
 
-		// A hidden tab nobody is looking at does not need to hold the port, and a
-		// page that is going away must not leave it open behind the next one.
+		// A page that is going away must not leave the port open behind the next one;
+		// a page that is only out of sight idles, unless this workstation opted out.
 		safe('watch listeners', () => {
 			const d = win.document;
-			if (!pad || !d) return;
-			if (d.addEventListener)
-				d.addEventListener('visibilitychange', () => {
-					if (!pad) return;
-					if (d.hidden) pad.stop('tab hidden');
-					else if (!pad.stats.on) { pad.start(); m0.watching = true; note('watch resumed'); paint(); }
-				});
+			if (!pad || !d || !d.addEventListener) return;
+			d.addEventListener('visibilitychange', () => {
+				if (d.hidden) {
+					if (idleWhenHidden()) pad.stop('tab hidden');
+					else note('tab hidden — keep-watching is on, still polling');
+				} else if (!pad.stats.on) {
+					pad.start();
+					m0.watching = true;
+					m0.paused = null;
+					note('watch resumed');
+					paint();
+				}
+			});
 			win.addEventListener('pagehide', () => stopWatch('page hiding'));
 		});
 	};
@@ -402,11 +427,15 @@ export function install(win, { now = () => Date.now() } = {}) {
 		return entry;
 	};
 
-	// The surface a human types at. `inventory` is the cheap look at the pad (one
-	// command, no EPC memory read) and `stop` hands the port back — the CLI cannot
-	// open it while a browser tab is holding it.
-	m0.inventory = () => (reader ? reader.inventory() : Promise.resolve(null));
-	m0.stop = stop;
+	// Keep polling the pad even when the tab is not in front — for a workstation where
+	// Koha sits behind another window, and for testing on real hardware without having
+	// to keep the browser focused.
+	m0.keepWatching = (on = true) => {
+		on ? store.set(KEEP_KEY, '1') : store.del(KEEP_KEY);
+		note('keep-watching', on ? 'on' : 'off');
+		if (!on && win.document && win.document.hidden && pad) pad.stop('tab hidden');
+		return !idleWhenHidden();
+	};
 
 	m0.scan = scan;
 	m0.rescan = rescan;
@@ -460,7 +489,12 @@ export function install(win, { now = () => Date.now() } = {}) {
 	// --- gate 3: armed already? reconnect silently, no gesture needed --------
 	m0.done = (async () => {
 		const params = safe('search', () => new win.URLSearchParams(win.location.search));
-		if (params && params.get('rfid') === '1') {
+		if (params && (params.get('rfid') === 'keep' || params.get('rfid') === 'nokeep')) {
+			const keep = params.get('rfid') === 'keep';
+			setArmed(true); // asking to keep watching is asking for the reader to run
+			m0.keepWatching(keep);
+			safe('replaceState', () => win.history.replaceState(null, '', win.location.pathname));
+		} else if (params && params.get('rfid') === '1') {
 			setArmed(true);
 			note('armed via ?rfid=1');
 			safe('replaceState', () => win.history.replaceState(null, '', win.location.pathname));

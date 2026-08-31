@@ -1,0 +1,41 @@
+<!--
+  Captured from the live ffzg returns.pl on 2026-08-31: the SAME barcode posted again,
+  now that it is no longer on loan. Koha refuses, and it renders the refusal INSIDE
+  table#checkedintable — the row is there, the title is there, the barcode is there.
+
+  The only structural difference from a real return: the due-date column holds words
+  instead of a date. So matching this table for the barcode believes an error message,
+  which is exactly the bug src/core/checkin.js had before the date test was added.
+
+  Note what is NOT used by the verdict: the wording ("Not checked out" appears twice,
+  and changes between Koha versions), and the patron column (empty for a book-drop
+  return, so it cannot be the positive signal).
+-->
+<table id="checkedintable" class="dataTable no-footer" role="grid" style="width: 832px;">
+    <thead><tr role="row"><th class="ci-duedate sorting_disabled" rowspan="1" colspan="1" style="width: 40.4333px;">Due date</th><th class="ci-title sorting_disabled" rowspan="1" colspan="1" style="width: 77.4333px;">Title</th><th class="ci-author sorting_disabled" rowspan="1" colspan="1" style="width: 54.4333px;">Author</th><th class="ci-barcode sorting_disabled" rowspan="1" colspan="1" style="width: 57.4333px;">Barcode</th><th class="ci-homelibrary sorting_disabled" rowspan="1" colspan="1" style="width: 45.4333px;">Home library</th><th class="ci-holdinglibrary sorting_disabled" rowspan="1" colspan="1" style="width: 54.4333px;">Holding library</th><th class="ci-shelvinglocation sorting_disabled" rowspan="1" colspan="1" style="width: 64.4333px;">Shelving location</th><th class="ci-callnumber sorting_disabled" rowspan="1" colspan="1" style="width: 55.4333px;">Call number</th><th class="ci-type sorting_disabled" rowspan="1" colspan="1" style="width: 47.4333px;">Type</th><th class="ci-patron sorting_disabled" rowspan="1" colspan="1" style="width: 46.4333px;">Patron</th><th class="ci-note sorting_disabled" rowspan="1" colspan="1" style="width: 29.4333px;">Note</th></tr></thead>
+
+
+        <tbody>
+        <tr role="row" class="odd">
+            <td class="ci-duedate">Not checked out
+
+            </td>
+            <td class="ci-title"><a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=269467">
+                    A commentary on Propertius, Book 3 /
+                </a>
+
+            </td>
+            <td class="ci-author">Propertius, Sextus.</td>
+            <td class="ci-barcode"><a href="/cgi-bin/koha/catalogue/moredetail.pl?biblionumber=269467&amp;itemnumber=369657#item369657">1302079605</a></td>
+            <td class="ci-homelibrary">Knjižnica FFZG</td>
+            <td class="ci-holdinglibrary">Knjižnica FFZG</td>
+            <td class="ci-shelvinglocation"><span class="shelvingloc">4. kat, klasična filologija</span></td>
+            <td class="ci-callnumber">ED02.1 PRO com-l3</td>
+
+            <td class="ci-type">Knjiga Klasična filologija</td>
+            <td class="ci-patron">Not checked out</td>
+            <td class="ci-note">
+
+
+            </td>
+           </tr></tbody></table>

@@ -95,7 +95,7 @@ test('armed but the port is gone: report it, never throw', async () => {
 	const m0 = install(win);
 	await m0.done;
 
-	assert.equal(port.opens, 1, 'tried to reconnect without a gesture');
+	assert.equal(port.opens, 3, 'tried to reconnect without a gesture, a few times: a reload can race the page before it for the port');
 	assert.equal(m0.gate, 'error');
 	assert.match(m0.error, /no device attached/);
 });
@@ -135,6 +135,29 @@ test('the console surface survives a broken reader', async () => {
 
 	await m0.stop();
 	assert.equal(m0.gate, 'disarmed');
+});
+
+test('keep-watching is a switch on this workstation, not a rebuild', async () => {
+	// Default is to idle while the tab is not in front. A workstation where Koha lives
+	// behind another window needs the pad to keep working there — and so does anyone
+	// testing on real hardware without the browser focused.
+	const { win, storage } = fakeWindow({ serial: true, armed: true, ports: [deadPort()] });
+	const m0 = install(win);
+	await m0.done;
+
+	assert.equal(m0.keepWatching(true), true);
+	assert.equal(storage.rfid_keepwatching, '1', 'remembered for the next page load');
+	assert.equal(m0.keepWatching(false), false);
+	assert.equal(storage.rfid_keepwatching, undefined);
+});
+
+test('?rfid=keep arms the reader and keeps the pad polled', async () => {
+	const { win, storage } = fakeWindow({ serial: true, search: '?rfid=keep', ports: [] });
+	const m0 = install(win);
+	await m0.done;
+
+	assert.equal(storage.rfid_armed, '1');
+	assert.equal(storage.rfid_keepwatching, '1');
 });
 
 test('?rfid=0 disarms and says so', async () => {
