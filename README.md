@@ -78,7 +78,7 @@ GPL-2.0-or-later, inherited from Biblio-RFID via `koha-rfid-go` — see
 |---|---|
 | `plugin/Koha/Plugin/Rot13/RFID.pm` | hooks, page/branch gating, inlines the bundle |
 | `plugin/…/koha-rfid.json` | pages, branches, users — server side, never shipped whole |
-| `plugin/…/koha-rfid.bundle.js` | **build artifact** from `src/`, gitignored |
+| `plugin/…/koha-rfid.bundle.js` | **build artifact** from `src/`, gitignored — the only script injected |
 | `src/core/boot.js` | dormant-by-default bootstrap + opt-in (Ctrl+Alt+R, `?rfid=1`) |
 | `src/main.js` | app entry: open port, probe, scan (M1: session + page logic) |
 | `src/driver/rfid3m.js` | 3M 810 protocol (CRC-16/GENIBUS frames, RFID501) |
@@ -89,7 +89,7 @@ GPL-2.0-or-later, inherited from Biblio-RFID via `koha-rfid-go` — see
 
 ```sh
 make test             # 26 hardware-free JS tests (offline, replays a live capture)
-make test-policy      # 31 gate tests, run on the server against this repo's RFID.pm
+make test-policy      # 29 gate tests, run on the server against this repo's RFID.pm
 make check            # bundle + test + test-policy
 make deploy           # backup on server → perl -c → install → restart plack
 make log              # what the plugin decided, per page load
@@ -122,9 +122,14 @@ Things that cost an hour each, in one place:
 - **Permission decisions belong to the pages.** returns.pl and circulation.pl
   already check what the logged-in librarian may do; the plugin only decides which
   pages get the script and whether a rollout list narrows it.
-- **With `legacy: true` both scripts are injected** (old Go-server polling and the
-  new bundle). That is safe only while the new one is dormant; before arming a
-  desk for real, turn `legacy` off or the two will fight over the reader.
+- **One plugin, one script.** This plugin injects the Web Serial bundle and
+  nothing else; there is no config key to bring back the old `localhost:9000`
+  polling client. `koha-rfid-go` ships that client as `Koha::Plugin::Rot13::RFID`
+  too — same class name, same path — so the two repos deploy *on top of each
+  other*, and whichever `.pm` landed last is the plugin Koha loads. `deploy.sh`
+  deletes any leftover `RFID/koha-rfid.js` on the server for that reason: with
+  the old file sitting next to the bundle you cannot tell from the filesystem
+  which client a page is running.
 - Decisions land in `/var/log/koha/ffzg/plack-error.log` — `make log`.
 
 ## Browser support

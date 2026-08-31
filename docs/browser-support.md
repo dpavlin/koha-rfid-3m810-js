@@ -5,7 +5,7 @@ over [Web Serial](https://developer.mozilla.org/en-US/docs/Web/API/Web_Serial_AP
 One file of logic (`rfid3m.js`), one pluggable transport underneath.
 
 ```
-koha-rfid.js (Koha staff page)          demo.html
+koha-rfid.bundle.js (Koha staff page)   demo.html
         \                                  /
         +------ rfid3m.js (protocol) -----+
               |                    |
@@ -102,9 +102,10 @@ await reader.probe();                           // wakes the reader; returns "10
 | `writeBlocks(sid, bytes)` | resolves when the read-back matches | – |
 | `close()` | releases the port | – |
 
-The JSON shapes are the ones `koha-rfid.js` already consumes from the Go server,
-so moving a page to Web Serial is a matter of replacing `fetch(url)` with the
-matching method; `tests/js/webserial.test.mjs` asserts the parity.
+The JSON shapes are the ones the Go server answers with, so moving a page to Web
+Serial is a matter of replacing `fetch(url)` with the matching method;
+`tests/driver.test.mjs` asserts the wire parity by replaying a live capture
+(`tests/fixtures/live-capture.txt`) taken from the Go binary.
 
 `content` in `program()` may be a barcode (≤ 16 chars, `130…` is encoded as a
 Book and secured to `DA`, anything else stays `D7`), or the words `blank` /

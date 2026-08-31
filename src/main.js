@@ -9,8 +9,9 @@
  *
  * M0 spike scope: open the granted port, wake the reader, do one inventory.
  * M1 replaces the inside of this file with the session state machine, the scan
- * loop and the toast/status UI; the page logic from koha-rfid.js moves in next
- * to it unchanged. Everything above this line stays the same either way.
+ * loop and the toast/status UI. The old Go-server client is the behaviour spec,
+ * not something to port: no code here talks to localhost:9000. Everything above
+ * this line stays the same either way.
  */
 
 import { Reader3M } from './driver/rfid3m.js';

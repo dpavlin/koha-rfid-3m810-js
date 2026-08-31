@@ -39,11 +39,11 @@ ssh "$HOST" "mkdir -p $STAGE"
 scp -q "$LOCAL_PLUGIN" "$HOST:$STAGE/RFID.pm"
 scp -q "$LOCAL_DIR/koha-rfid.json" "$HOST:$STAGE/koha-rfid.json"
 scp -q "$BUNDLE" "$HOST:$STAGE/koha-rfid.bundle.js"
-# The old Go-server script ships alongside the bundle while "legacy": true in
-# koha-rfid.json; SKIP_LEGACY=1 leaves the server copy alone.
-if [ "${SKIP_LEGACY:-}" != "1" ] && [ -f "$LOCAL_DIR/koha-rfid.js" ]; then
-	scp -q "$LOCAL_DIR/koha-rfid.js" "$HOST:$STAGE/koha-rfid.js"
-fi
+# This plugin ships exactly one script: the Web Serial bundle. The old Go-server
+# polling client is not deployed from here (it lives in koha-rfid-go, as a plugin
+# with the same class name — see README). Step 5 deletes any copy left behind on
+# the server, because a stale koha-rfid.js next to the bundle is indistinguishable
+# from "the old version is deployed" when you are debugging a staff page.
 
 echo "=== 4/5 perl syntax check on the server (plack NOT restarted yet) ==="
 if ! ssh "$HOST" "sudo -u $KOHA_USER_OS perl -I/srv/koha_$INSTANCE -c $STAGE/RFID.pm"; then
@@ -59,7 +59,7 @@ ssh "$HOST" "
 	sudo cp '$STAGE/RFID.pm' '$PLUGPM'
 	sudo cp '$STAGE/koha-rfid.json' '$ASSETS/koha-rfid.json'
 	sudo cp '$STAGE/koha-rfid.bundle.js' '$ASSETS/koha-rfid.bundle.js'
-	if [ -f '$STAGE/koha-rfid.js' ]; then sudo cp '$STAGE/koha-rfid.js' '$ASSETS/koha-rfid.js'; fi
+	sudo rm -f '$ASSETS/koha-rfid.js'   # old Go-server client: not ours to ship
 	sudo chown -R $KOHA_USER_OS:$KOHA_USER_OS '$PLUGDIR'
 	sudo rm -rf '$STAGE'
 	# systemctl restart koha-plack is a no-op on this box (LSB unit reports

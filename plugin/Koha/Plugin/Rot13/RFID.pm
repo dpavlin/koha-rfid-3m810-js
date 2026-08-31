@@ -25,7 +25,7 @@ our $metadata = {
     name            => 'RFID Integration (Web Serial)',
     author          => 'Dobrica Pavlinusic',
     date_authored   => '2026-07-06',
-    date_updated    => '2026-08-30',
+    date_updated    => '2026-08-31',
     minimum_version => undef,
     maximum_version => undef,
     version         => $VERSION,
@@ -34,8 +34,9 @@ our $metadata = {
 };
 
 ## Defaults used when the config file is missing or unreadable.
-## "legacy" also injects the old Go-server polling script (kept during the M0
-## spike so existing behaviour is untouched while the Web Serial path is tested).
+## There is deliberately no way to make this plugin talk to the old localhost Go
+## server: this plugin is the Web Serial path, and the Go path stays in
+## koha-rfid-go (as its own plugin — same class name, so the two cannot coexist).
 my %DEFAULT_CONFIG = (
     pages       => [
         'circ/returns.pl', 'circ/circulation.pl', 'circ/circulation-home.pl',
@@ -43,7 +44,6 @@ my %DEFAULT_CONFIG = (
     ],
     branches    => [],          # empty = every branch
     users       => [],          # empty = every user (staff pages are gated anyway)
-    legacy      => JSON::XS::true(),
     hint        => JSON::XS::true(),
     bookPrefix  => '130',
     debug       => JSON::XS::false(),
@@ -187,9 +187,8 @@ sub _js {
     return $bytes;
 }
 
-## Inject the Web Serial bundle — and, during the transition, the old
-## Go-server script as well. Wrapped so that a plugin bug can never take down
-## a staff page: on any error we inject nothing.
+## Inject the Web Serial bundle, and nothing else. Wrapped so that a plugin bug
+## can never take down a staff page: on any error we inject nothing.
 sub intranet_js {
     my ( $self, $args ) = @_;
 
@@ -229,18 +228,12 @@ sub intranet_js {
 
         # Only client-side keys go to the browser — pages/branches/users stay server side.
         my %client_config = map { exists $cfg->{$_} ? ($_ => $cfg->{$_}) : () }
-            qw(hint debug bookPrefix legacy);
+            qw(hint debug bookPrefix);
 
         my $html = sprintf(
             '<script>window.RFID_CONFIG=%s;window.RFID_CONTEXT=%s;</script>',
             _js( encode_json(\%client_config) ), _js($context)
         );
-
-        if ( $cfg->{legacy} ) {
-            my ( $legacy, $lerr ) = _cached_file( _dir() . 'koha-rfid.js' );
-            warn "RFID: legacy script skipped ($lerr)\n" if $lerr;
-            $html = "<script>" . _js($legacy) . "</script>\n" . $html if $legacy;
-        }
 
         $html .= "\n<script>" . _js($bundle) . "</script>";
 
