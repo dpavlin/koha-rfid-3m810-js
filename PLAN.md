@@ -116,12 +116,12 @@ AFI is a hint, never a gate: check-in does not filter on it (a book reading `DA`
 still be on loan — a write that failed a month ago), and `DA` on checkout only suggests
 the book is in the building. Koha decides; the tag is told afterwards.
 
-**Today the JS port does not write the AFI at all**: `core/checkin.js` never calls the
-reader, so a returned book keeps the `D7` it was issued with and tells every system that
-reads tags — gate, self-check, hold shelf — that it is still on loan. The inverse slip is
-the one that cannot be survived: a book on loan carrying `DA`, which the Go constants
-comment describes as "door will ignore". Fixing the first is M1a; M1b is written so the
-second never happens.
+The first version of this port did not write the AFI at all — `core/checkin.js` never
+called the reader, so a returned book kept the `D7` it was issued with and told every
+system that reads tags that it was still on loan. `core/security.js` (M1a) is what closes
+that. The inverse slip is the one that cannot be survived: a book on loan carrying `DA`,
+which the Go constants comment describes as "door will ignore" — so M1b writes `D7` only
+after an issue is confirmed, and never on the way in.
 
 #### The unwritten bit is the one error not to walk past
 
@@ -292,9 +292,19 @@ each page holds the barcode, both header copies stay empty, nothing is submitted
 the checkout box is where auto-checkout would start, and it is deliberately not taken.
   Missing: a Connect affordance a librarian can see without being told (the pill and
   Ctrl+Alt+R are it for now).
-- **M1a — the security bit** (§3.1): write `DA` after Koha confirms a check-in, take over
-  the screen and beep when it cannot. This is a bug fix wearing a feature's clothes: every
-  check-in the plugin has done so far left the tag at `D7`.
+- **M1a — the security bit** (§3.1): ✅ done. `core/security.js` (the owed-write machine:
+  `owe` at post time → `verdict` on the page that answers → `pad()` writes `DA` to a tag
+  that is still in range, shouts about one that is not) and `core/alert.js` (the takeover:
+  covers the page, beep through the window's `AudioContext`, moving title bar, exits are
+  the verified write and an acknowledge that records; `Esc` is the button). Wiring is three
+  lines deep — `owe` in `postCheckin`, `verdict` in `onOutcome`, `pad()` after every page
+  load / pad change / `rescan()`. Config `securityUpdate` (on unless switched off — nothing
+  can be owed unless posting was opted into), `securityGraceMs`, `securityBeep`; the debug
+  surface gained `rfidM0.tagWrites()`, `rfidM0.securitySkipped()`, `rfidM0.showSecurityAlert()`.
+  Tests: `security.test.mjs` (the machine), `alert.test.mjs` (the screen), and
+  `checkin-afi.test.mjs`, which drives `install()` through three page loads — posted, then
+  confirmed with the book still there (written), then gone (screen), then back (written and
+  screen down), plus the refusal that writes nothing and makes no noise.
 - **M1b — submit everywhere, not just fill**: `circulation.pl` and `renew.pl` post as well
   as fill (the fill-only rule in M1 was my decision, and it is being overruled — a
   librarian scanning at a patron's page means it). Order of work is not negotiable:

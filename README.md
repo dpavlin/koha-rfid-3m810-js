@@ -217,6 +217,9 @@ await rfidM0.program(cardSid, '1309999998', { confirm: '200000000042' })
 
 From the console: `rfidM0.rescan()` re-reads the pad on demand, `rfidM0.watch` holds
 the loop's counters (`polls`, `changes`, `errors`), `rfidM0.log` is everything.
+`rfidM0.tagWrites()` lists what the tags are still owed after a confirmed transaction,
+`rfidM0.securitySkipped()` what somebody agreed to leave unwritten, and
+`rfidM0.showSecurityAlert()` puts the takeover on the screen without needing a book.
 
 ## Field notes (ffzg, Koha 18.11 fork, plack)
 

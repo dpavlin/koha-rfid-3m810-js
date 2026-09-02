@@ -43,6 +43,8 @@
 import { boot as bootReader, watch } from '../main.js';
 import { programTag, readTag } from './tagwrite.js';
 import { session as checkinSession, readCheckinResult } from './checkin.js';
+import { owed as owedSession, AFI } from './security.js';
+import { takeover } from './alert.js';
 import { toasts } from './toast.js';
 
 const VERSION = '0.1.0';
@@ -161,6 +163,9 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 				title = 'RFID reader: disarmed (click to connect)';
 			}
 			if (m0.lastOutcome) title += `; last check-in ${m0.lastOutcome.barcode} ${m0.lastOutcome.ok ? 'ok' : 'not confirmed'}`;
+			// A write the plugin still owes the tag is worth seeing before it becomes an alarm.
+			const owed = writes ? writes.list() : [];
+			if (owed.length) title += `; ${owed.length} tag write(s) owed (${owed.map((e) => e.barcode).join(', ')})`;
 			if (!m0.watching && m0.paused) title += `; watch paused (${m0.paused})`;
 			const flashing = m0.pulseUntil && now() < m0.pulseUntil;
 			hint.textContent = text;
@@ -278,10 +283,35 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 			if (!t || !t.post) return false; // never post a checkout or a renew: see PAGE_TARGETS
 			const form = t.form;
 			form.elements['barcode'].value = barcode;
+			// The page is about to reload and the tag may not still be here when it comes
+			// back, so the write is owed from now, with the AFI as it reads at this moment.
+			const tag = (m0.tags || []).find((x) => x.content === barcode);
+			if (writes && tag) writes.owe({ barcode, sid: tag.sid, from: tag.security, to: AFI.secure });
 			stopWatch('check-in posted');
 			form.submit();
 			return true;
 		});
+
+	const AFI_INV = { [AFI.secure]: 'DA', [AFI.unsecure]: 'D7' };
+
+	// The screen a write that cannot be finished ends up on (core/alert.js). It is built
+	// before the machine that decides, because the machine hands it the button.
+	const alarm = takeover(win, {
+		beep: cfg.securityBeep !== false,
+		onAcknowledge: (barcode) => writes && writes.acknowledge(barcode),
+	});
+
+	// Assigned as soon as there is a check-in session to hang off: nothing can be owed
+	// unless a transaction was posted, and posting is already opt-in (autoCheckin), so
+	// this defaults to on. A check-in that leaves the tag describing the old state is a
+	// half-done check-in — see core/security.js for the ordering.
+	let writes = null;
+
+	/** Look at the pad and finish whatever the previous page left owed. */
+	const writeOwed = () => {
+		if (!writes) return Promise.resolve(null);
+		return writes.pad({ tags: m0.tags }).catch((e) => note('tag write loop failed', String((e && e.message) || e)));
+	};
 
 	const checkins =
 		cfg.autoCheckin === true
@@ -294,6 +324,9 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 					log: note,
 					onOutcome: (outcome, barcode) => {
 						m0.lastOutcome = { at: now(), barcode, ok: outcome.ok };
+						// This is the verify point the tag write waits for: Koha has answered,
+						// so the tag may now be told what just happened to it.
+						if (writes) writes.verdict({ barcode, ok: outcome.ok });
 						// Success is announced; Koha shows its own failures, in context, better
 						// than a blunter copy of them could.
 						if (outcome.ok) toast(`✓ checked in ${barcode}`);
@@ -301,6 +334,25 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 					},
 				})
 			: null;
+
+	if (cfg.securityUpdate !== false && checkins)
+		writes = owedSession({
+			store: sstore,
+			now,
+			graceMs: cfg.securityGraceMs || 8000,
+			alert: alarm,
+			log: note,
+			schedule: (fn, ms) => setTimeout(fn, ms),
+			onChange: () => paint(),
+			write: async ({ sid, to }) => {
+				if (!reader) throw new Error('the reader is not connected any more');
+				await reader.writeAfi(sid, to);
+				// The watcher compares SIDs, so it will not notice this on its own.
+				const t = (m0.tags || []).find((x) => String(x.sid).toLowerCase() === String(sid).toLowerCase());
+				if (t) t.security = AFI_INV[to] || t.security;
+				pulse();
+			},
+		});
 
 	const start = async (ports) => {
 		m0.gate = 'booting';
@@ -320,9 +372,13 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 			if (checkins) {
 				checkins.report(readCheckinResult(win.document));
 				// pump() navigates when it posts something; then the pad is not ours
-				if (!checkins.pump(m0.tags)) startWatch();
+				if (!checkins.pump(m0.tags)) {
+					startWatch();
+					writeOwed(); // a write owed by the page that just reloaded
+				}
 			} else {
 				startWatch();
+				writeOwed();
 			}
 		}
 		return m0;
@@ -374,6 +430,17 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 	m0.connect = connect;
 	m0.stop = stop;
 	m0.inventory = () => (reader ? reader.inventory() : Promise.resolve(null));
+	// What the tags owe and what somebody agreed to leave unpaid — the two lists a shift
+	// would want if a security bit is ever disputed.
+	m0.tagWrites = () => (writes ? writes.list() : []);
+	m0.securitySkipped = () => (writes ? writes.skipped() : []);
+	// For seeing the alarm without carrying a book away: `rfidM0.showSecurityAlert()`.
+	m0.showSecurityAlert = (entries) =>
+		alarm.show(
+			entries && entries.length
+				? entries
+				: [{ barcode: (m0.tags && m0.tags[0] && m0.tags[0].content) || '1302079605', from: 'D7', to: AFI.secure, ageMs: 9000 }],
+		);
 	// --- watching: a tag put down later must not need a page reload ----------
 	let pad = null;
 
@@ -404,6 +471,8 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 					checkins.forget(removed.map((t) => t.content));
 					if (checkins.pump(m0.tags)) return; // posted; the page is going away
 				} else fillScanBox({ replaceStale: true });
+				// A book put back on the reader is the usual way an owed write completes.
+				writeOwed();
 			},
 			onError: (msg, n) => note(n ? `watch error #${n}` : 'watch error', msg),
 			onStop: (why) => {
@@ -450,6 +519,7 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 			note('rescan', `${m0.tags.length} tag(s) on the pad`);
 			pulse();
 			fillScanBox({ replaceStale: true });
+			writeOwed(); // "I put it back on" is exactly what this button means
 			return { tags: m0.tags };
 		} catch (e) {
 			return { error: String((e && e.message) || e) };

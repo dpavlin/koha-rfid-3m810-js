@@ -13,5 +13,8 @@
 	"bookPrefix": "130",
 	"programming": true,
 	"autoCheckin": true,
+	"securityUpdate": true,
+	"securityGraceMs": 8000,
+	"securityBeep": true,
 	"debug": true
 }

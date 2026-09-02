@@ -23,6 +23,15 @@ Polling pauses while the tab is not in front (`?rfid=keep` overrides); a tab dri
 CDP while backgrounded sees no scans until you ask for it. That is a feature: nobody
 gets checked in behind their own screen.
 
+## A test suite that prints results and never exits is holding a timer
+
+Every browser surface is reached through the injected `win` — serial ports, storage,
+`setInterval`. A module that grabs `globalThis.setInterval` behind the fake window's back
+schedules a **real** interval in tests, and `node --test` then prints its results and hangs
+until the timeout, which looks exactly like a slow machine (this cost a debugging session
+on the security-bit alert). `tests/helpers/fakewindow.mjs` fakes and records the timers, so
+an accidental global one shows up as a missing handle, not as a mysterious 120 s run.
+
 ## Where the fork's own code lives (read templates there, not /usr/share)
 
 This installation carries its own copies of the staff templates in **`/srv/koha_ffzg`**,
