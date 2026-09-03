@@ -39,40 +39,60 @@ const CARD = {
 	tag_type: 'RFID501',
 };
 
-const desk = ({ tags = [], box = 'returns', config = {}, session = {}, failWrites = false } = {}) => {
+const desk = ({
+	tags = [],
+	box = 'returns',
+	config = {},
+	session = {},
+	failWrites = false,
+	writeDelayMs = 0,
+	strictWrites = false,
+	now = undefined,
+	value = '', // what the focused box already holds when the page loads
+} = {}) => {
+	// One timeline for the reader and the forms: "the tag was written before the page went
+	// away" is a fact about order, and two counters that each end at 1 cannot say it.
+	const trace = [];
 	const reader = fakeReader(
 		tags.map((t) => ({ ...t })),
-		{ failWrites },
+		{ failWrites, trace, writeDelayMs, strictWrites },
 	);
 	const boxes = {
 		returns: form(`${RUNTIME}/circ/returns.pl`, {
 			id: 'checkin-form',
 			fields: { barcode: field({ id: 'barcode' }) },
+			trace,
 		}),
 		renew: form(`${RUNTIME}/circ/renew.pl`, {
 			fields: { barcode: field({ id: 'barcode' }) },
+			trace,
 		}),
 		issue: form(`${RUNTIME}/circ/circulation.pl`, {
 			id: 'mainform',
 			fields: { barcode: field({ id: 'barcode' }) },
+			trace,
 		}),
 		patron: form(`${RUNTIME}/circ/circulation.pl`, {
 			id: 'patronsearch',
 			fields: {
 				findborrower: field({ id: 'findborrower', name: 'findborrower' }),
 			},
+			trace,
 		}),
 		// The header quick-box: same transaction as `returns`, on a page that has no box of
 		// its own. Alt+R focuses this one from anywhere.
 		header: form(`${RUNTIME}/circ/returns.pl`, {
 			fields: { barcode: field({ id: 'ret_barcode' }) },
+			trace,
 		}),
 		catalog: form(`${RUNTIME}/catalogue/search.pl`, {
 			id: 'cat-search-block',
 			fields: { q: field({ id: 'search-form', name: 'q' }) },
+			trace,
 		}),
 	};
-	const focused = boxes[box].elements.barcode || boxes[box].elements.findborrower;
+	const focused = boxes[box].elements.barcode || boxes[box].elements.findborrower || boxes[box].elements.q;
+	if (focused) focused.value = value;
 	const { win, elements } = fakeWindow({
 		serial: true,
 		armed: true,
@@ -82,10 +102,12 @@ const desk = ({ tags = [], box = 'returns', config = {}, session = {}, failWrite
 		session,
 		config: { watch: false, bookPrefix: '130', ...config },
 	});
-	const m0 = install(win, { boot: reader.installer() });
+	const m0 = install(win, { boot: reader.installer(), ...(now ? { now } : {}) });
 	return {
 		m0,
 		reader,
+		trace,
+		win,
 		boxes,
 		elements,
 		focused,
@@ -305,4 +327,80 @@ test('what the plugin wrote is what the pill shows next time it paints', async (
 		chips.some((c) => c.includes(BOOK.content) && c.includes('\u21e4')),
 		`in library after the write: ${chips}`,
 	);
+});
+
+// --- the ordering, the races, and the memory's expiry -------------------------------
+// Everything above asks *what* happened. These ask *when*, because the design decision
+// this whole file rests on is a when: the tag is written before the page navigates, since
+// navigating closes the serial port and a write still in flight is a book silently left on
+// loan. Two counters that both end at 1 cannot tell you that; one timeline can.
+
+test('the tag is written, then the page is posted — in that order', async () => {
+	const d = desk({ tags: [BOOK] });
+	await d.m0.done;
+	await settled();
+
+	assert.deepEqual(d.trace, [`write:${BOOK.sid.slice(-4)}`, 'submit:checkin-form'], d.trace.join(' , '));
+});
+
+test('a slow write holds the post; it does not race it', async () => {
+	const d = desk({ tags: [BOOK], writeDelayMs: 40 });
+	await d.m0.done;
+	await settled(); // the write is still open 40ms away
+
+	assert.equal(d.boxes.returns.submits, 0, 'nothing posted while the tag is still being told');
+	assert.equal(d.boxes.returns.elements.barcode.value, BOOK.content, 'the box is filled already');
+
+	await new Promise((r) => setTimeout(r, 60));
+	assert.equal(d.boxes.returns.submits, 1, 'and it goes in once the reader has answered');
+	assert.deepEqual(d.trace, [`write:${BOOK.sid.slice(-4)}`, 'submit:checkin-form']);
+});
+
+test('a book that left the pad mid-write is still returned, and the log says the bit was not told', async () => {
+	const d = desk({ tags: [BOOK], writeDelayMs: 30, strictWrites: true });
+	await new Promise((r) => setTimeout(r, 5)); // the act is in flight, the write has not run
+	d.reader.take(BOOK.sid); // the librarian picked the book up
+	await new Promise((r) => setTimeout(r, 60));
+
+	assert.deepEqual(d.reader.writes, [], 'the write never landed');
+	assert.equal(d.boxes.returns.submits, 1, 'Koha decides whether that barcode is a return, not us');
+	assert.ok(
+		d.m0.log.some((l) => /write|bit/i.test(l) && /tag moved out of range/.test(l)),
+		`the failure is in the log: ${d.m0.log.slice(-4).join(' | ')}`,
+	);
+});
+
+test('the posted memory expires, so a stuck tag cannot block the desk forever', async () => {
+	const stale = { rfid_posted: JSON.stringify({ [`checkin:${BOOK.content}`]: Date.now() - 60_000 }) };
+	const d = desk({ tags: [BOOK], session: stale, config: { postedTtl: 45 } });
+	await d.m0.done;
+	await settled();
+
+	assert.equal(d.boxes.returns.submits, 1, '60s old with a 45s memory: it is a new scan again');
+});
+
+test('a box that already holds a barcode still under the head is left alone', async () => {
+	const d = desk({ tags: [BOOK], value: BOOK.content });
+	await d.m0.done;
+	await settled();
+
+	assert.equal(d.boxes.returns.submits, 0, 'a value the librarian typed is a transaction in progress');
+	assert.deepEqual(d.reader.writes, [], 'and the tag under the head is not told anything either');
+});
+
+test('two acts at once are one transaction, not two posts of the same page', async () => {
+	const d = desk({ tags: [], writeDelayMs: 30 });
+	await d.m0.done;
+
+	// A stack shifting under the head: the watch fires again while the first book's write is
+	// still open. Two posts of the same page load is a double transaction, not two.
+	d.reader.put({ ...BOOK });
+	await d.m0.rescan(); // a scan returns immediately; the act it starts is still in flight
+	await new Promise((r) => setTimeout(r, 5));
+	d.reader.put({ ...SECOND });
+	await d.m0.rescan();
+	await new Promise((r) => setTimeout(r, 60));
+
+	assert.equal(d.boxes.returns.submits, 1, `one page load, one transaction: ${d.trace.join(' , ')}`);
+	assert.equal(d.boxes.returns.elements.barcode.value, BOOK.content, 'the book that landed first');
 });

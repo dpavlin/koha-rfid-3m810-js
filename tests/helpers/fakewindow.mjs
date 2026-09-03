@@ -145,6 +145,9 @@ export function fakeWindow({
 			},
 			forms,
 			activeElement: focus,
+			// Set it and `dispatch('visibilitychange')`: the plugin pauses the pad when the
+			// tab goes away, which is a behaviour, not a constant.
+			hidden: false,
 			body: {
 				children: [],
 				appendChild(n) {
@@ -204,13 +207,17 @@ export const field = ({
  * doing its job, on circulation.pl it is the plugin taking an item out of the library
  * without anyone asking, so the count is the assertion that matters.
  */
-export function form(action, { id = '', fields = {} } = {}) {
+export function form(action, { id = '', fields = {}, trace = null } = {}) {
 	const f = {
 		id,
 		elements: fields,
 		getAttribute: (k) => (k === 'action' ? action : null),
 		submits: 0,
 		submit() {
+			// `trace` is a shared timeline: the ordering claims (the tag is written before the
+			// page navigates, because navigating closes the port) cannot be made from two
+			// counters that both end at 1.
+			if (trace) trace.push(`submit:${id || action}`);
 			this.submits++;
 		},
 	};
@@ -229,7 +236,10 @@ export function form(action, { id = '', fields = {} } = {}) {
  * written is only worth anything if it is measured at the reader, not in the plugin's own
  * idea of what it wrote.
  */
-export function fakeReader(tags = [], { failWrites = false } = {}) {
+export function fakeReader(
+	tags = [],
+	{ failWrites = false, trace = null, writeDelayMs = 0, strictWrites = false } = {},
+) {
 	const pad = [...tags];
 	const writes = [];
 	return {
@@ -250,6 +260,14 @@ export function fakeReader(tags = [], { failWrites = false } = {}) {
 		},
 		async writeAfi(sid, afi) {
 			if (failWrites) throw new Error('tag moved out of range');
+			if (trace) trace.push(`write:${String(sid).slice(-4)}`);
+			if (writeDelayMs) await new Promise((r) => setTimeout(r, writeDelayMs));
+			// Checked after the delay, because that is when a reader fails: the book has to be
+			// under the head at the moment of the write, not at the moment it was noticed.
+			// Lenient by default; the walk-away test asks for the honest version.
+			if (strictWrites && !pad.some((x) => String(x.sid).toLowerCase() === String(sid).toLowerCase())) {
+				throw new Error('tag moved out of range');
+			}
 			const hex = afi.toString(16).toUpperCase().padStart(2, '0');
 			writes.push({ sid: String(sid).toLowerCase(), afi, hex });
 			const t = pad.find((x) => String(x.sid).toLowerCase() === String(sid).toLowerCase());

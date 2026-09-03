@@ -328,7 +328,7 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 	 * on the pad, whatever it referred to has been dealt with, and whatever is on the pad now
 	 * takes its turn.
 	 */
-	const act = ({ replaceStale = false } = {}) => {
+	const doAct = ({ replaceStale = false } = {}) => {
 		const t = target();
 		if (!t) return Promise.resolve(null); // the cursor is nowhere of ours
 		if (cfg.fill === false) return Promise.resolve(null);
@@ -344,13 +344,13 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 			note(`${t.word}: nothing to post`, `${seen.length} tag(s) on the pad, none of them new`);
 			return Promise.resolve(null);
 		}
-		// Never type over a barcode the librarian is working with. A value still on the pad
-		// is a transaction in progress; a value that is not on the pad any more is stale.
-		if (
-			t.field.value &&
-			t.field.value !== pick.content &&
-			(!replaceStale || seen.some((x) => x.content === t.field.value))
-		) {
+		// Only an empty box, or one we filled, is ours. A barcode that is already in the box was
+		// put there by a person — typed, or scanned by a keyboard wedge, which is the same thing
+		// to this code — and the transaction it belongs to is theirs: the plugin fills boxes, it
+		// does not press Return on someone else's typing. A value that has left the pad is stale,
+		// and on a rescan stale loses.
+		const typedByUs = m0.filled === pick.content;
+		if (t.field.value && !typedByUs && (!replaceStale || seen.some((x) => x.content === t.field.value))) {
 			note(`${t.word} box left alone`, `holds "${t.field.value}"`);
 			return Promise.resolve(null);
 		}
@@ -378,6 +378,24 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 			safe('submit', () => t.form.submit());
 			return { word: t.word, barcode: pick.content, posted: true };
 		});
+	};
+
+	/**
+	 * One transaction at a time. A stack shifting under the head makes the watch fire again
+	 * while the first book's write is still open, and two posts on one page load is one too
+	 * many: at best an "item is not checked out" error where the return already worked, at
+	 * worst a second issue. A caller that arrives mid-transaction is not queued behind it —
+	 * the transaction in flight will have posted by the time it matters, and the page it
+	 * posted is already navigating away.
+	 */
+	let inFlight = null;
+	const act = (opts) => {
+		if (inFlight) return inFlight;
+		const p = doAct(opts).finally(() => {
+			if (inFlight === p) inFlight = null;
+		});
+		inFlight = p;
+		return p;
 	};
 
 	const start = async (ports) => {
