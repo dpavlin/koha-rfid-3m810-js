@@ -17,17 +17,24 @@
  *                                                  (Ctrl+Alt+R, and ?rfid=1).
  *   3. armed + remembered port                  -> boot the app, silently.
  *
- * When it is running it says so: the corner element is a status pill (`RFID ✓
- * 10.5.0.2 · 3`), not just an opt-in link, and the first item barcode from a scan
- * is written into the check-in box — never submitted, and never over what a
- * librarian already typed. A reader that works but is invisible is indistinguishable
- * from a reader that is not installed.
+ * When it is running it says so, in the corner, in the language of the desk: every
+ * barcode on the pad and whether each one is `in library` or `on loan`, in colour, with
+ * an arrow saying which way the book is going. Not the reader's firmware version, which
+ * nobody at a desk can act on. A reader that works but is invisible is indistinguishable
+ * from a reader that is not installed, and a reader that is visible but says nothing a
+ * librarian can read is nearly as bad.
+ *
+ * What it does with a scan is decided by where the cursor is (see core/intent.js) and
+ * happens in one breath: the tag is written to the state that transaction produces, the
+ * barcode goes into the box, the box's form is posted. `autoSubmit: false` stops at the
+ * fill; `securityBit: false` stops at the write. Nothing is typed over what a librarian
+ * already typed, and nothing is posted twice for the same tag while it stays on the pad.
  *
  * While connected the pad is watched: a tag put down (or taken away) after the page
- * loaded is noticed within about half a second, the pill flashes, and a check-in box
- * whose barcode has left the pad is refilled from what is on it now. Polling stops
- * when the tab is hidden and when the page goes away, so an open tab never holds the
- * port hostage from the 3M tool or a CLI.
+ * loaded is noticed within about half a second, the pill flashes, and a box whose barcode
+ * has left the pad is filled from what is on it now. Polling stops when the tab is hidden
+ * and when the page goes away, so an open tab never holds the port hostage from the 3M
+ * tool or a CLI.
  *
  * A granted port is remembered by Chrome for this origin, so step 3 costs no user
  * interaction from then on: getPorts() + open() need no gesture, requestPort() does.
@@ -42,10 +49,7 @@
 
 import { boot as bootReader, watch } from '../main.js';
 import { programTag, readTag } from './tagwrite.js';
-import { session as checkinSession, readCheckinResult } from './checkin.js';
-import { owed as owedSession, AFI } from './security.js';
-import { takeover } from './alert.js';
-import { toasts } from './toast.js';
+import { intentOf, stateOf, STATES } from './intent.js';
 
 const VERSION = '0.1.0';
 const ARM_KEY = 'rfid_armed';
@@ -63,7 +67,7 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 		server: win.RFID_CONTEXT || null,
 		config: win.RFID_CONFIG || {},
 		watching: false,
-		writes: [],
+		programs: [],
 		log: [],
 	};
 	win.rfidM0 = m0;
@@ -100,7 +104,7 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 	const setArmed = (on) => (on ? store.set(ARM_KEY, '1') : store.del(ARM_KEY));
 
 	// Whether to keep polling the pad when the tab is not in front. Default: don't — a
-	// check-in that fires on a page nobody is looking at is a surprise, and a toast
+	// transaction that fires on a page nobody is looking at is a surprise, and a pill
 	// nobody sees is not feedback.
 	//
 	// The catch is that Chrome also reports `hidden` when another application covers
@@ -126,49 +130,81 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 	let transport = null;
 	let hint = null;
 
-	// The corner element doubles as the status light. Everything worth knowing
-	// before scanning is in it: connected or not, reader version, how many tags it
-	// can see, or what failed.
+	// The corner element is the librarian's only view of the reader, so it shows what is
+	// under the head: every barcode on the pad, and beside each one an arrow saying which
+	// way that book is supposed to go, coloured the same way. The reader's firmware
+	// version is in the tooltip and on the console, where the person debugging it is.
 	const PILL_BASE =
-		'position:fixed;right:6px;bottom:6px;z-index:9999;font:11px/1.4 monospace;' +
-		'padding:1px 5px;border:1px solid transparent;border-radius:3px;text-decoration:none';
+		'position:fixed;right:6px;bottom:6px;z-index:9999;font:11px/1.7 monospace;' +
+		'padding:1px 5px;border:1px solid transparent;border-radius:3px;text-decoration:none;' +
+		'max-width:55vw;text-align:right';
+
+	// One chip per tag, because a stack of returns is a list and a count of them is not
+	// feedback. Green arrow in, amber arrow out; a tag whose bit the plugin cannot read
+	// gets a grey dot rather than a guess.
+	const CHIP = 'display:inline-block;margin:0 0 0 5px;padding:0 4px;border-radius:2px;';
+	const TONE = {
+		in: 'color:#0c6b0c;background:#d8f0d8',
+		out: 'color:#8a5300;background:#ffeccd',
+		none: 'color:#555;background:#e6e6e6',
+	};
 
 	const paint = () =>
 		safe('paint', () => {
 			if (!hint) return;
-			const n = (m0.tags || []).length;
-			let text = 'RFID —', title = 'RFID reader: dormant', css = 'opacity:.45;color:#666';
+			const d = win.document;
+			const tags = m0.tags || [];
+			let head = 'RFID —',
+				title = 'RFID reader: dormant',
+				css = 'opacity:.45;color:#666';
 			if (m0.gate === 'ready') {
-				const seen = (m0.tags || []).map((t) => t.content || t.sid).join(', ');
-				text = `RFID ✓ ${m0.readerVersion || '?'}${n ? ` · ${n}` : ''}`;
-				title = `reader ${m0.readerVersion}; ${n} tag(s)${seen ? ': ' + seen : ''}`;
+				head = `RFID ✓${tags.length ? '' : ' no tag on the pad'}`;
+				title = `reader ${m0.readerVersion || '?'}, ${tags.length} tag(s) on the pad`;
 				css = 'opacity:1;color:#075707;background:#e8f6e8;border-color:#a9d9a9';
 			} else if (m0.gate === 'error') {
-				text = 'RFID !';
+				head = 'RFID !';
 				title = 'reader failed: ' + (m0.error || 'unknown');
 				css = 'opacity:.95;color:#a11111;background:#fdeeee;border-color:#e6b3b3';
 			} else if (m0.gate === 'unsupported') {
-				text = 'RFID ✗';
+				head = 'RFID ✗';
 				title = 'this browser has no Web Serial — nothing will happen here';
 				css = 'opacity:.5;color:#a11111';
 			} else if (m0.gate === 'needs-grant' || m0.gate === 'cancelled') {
-				text = 'RFID ?';
+				head = 'RFID ?';
 				title = 'armed, but no device chosen yet';
 				css = 'opacity:.85;color:#8a6100;background:#fff8e5;border-color:#e4cf9a';
 			} else if (m0.gate === 'choosing' || m0.gate === 'booting') {
-				text = 'RFID …';
+				head = 'RFID …';
 				title = 'waiting for the device chooser / reader';
 				css = 'opacity:.85;color:#333';
 			} else if (m0.gate === 'disarmed') {
 				title = 'RFID reader: disarmed (click to connect)';
 			}
-			if (m0.lastOutcome) title += `; last check-in ${m0.lastOutcome.barcode} ${m0.lastOutcome.ok ? 'ok' : 'not confirmed'}`;
-			// A write the plugin still owes the tag is worth seeing before it becomes an alarm.
-			const owed = writes ? writes.list() : [];
-			if (owed.length) title += `; ${owed.length} tag write(s) owed (${owed.map((e) => e.barcode).join(', ')})`;
+			for (const t of tags) {
+				const s = stateOf(t.security);
+				title += `; ${t.content || t.sid} ${s.word}`;
+			}
+			if (m0.lastAction) title += `; last: ${m0.lastAction}`;
 			if (!m0.watching && m0.paused) title += `; watch paused (${m0.paused})`;
 			const flashing = m0.pulseUntil && now() < m0.pulseUntil;
-			hint.textContent = text;
+
+			// Rebuilt every paint: emptying with `textContent = ''` drops the children in
+			// every browser this targets, which is also what the tests assert against. Tag
+			// content only ever goes in as text, never as markup — a barcode is whatever
+			// somebody wrote on the tag.
+			hint.textContent = '';
+			const chip = (text, tone) => {
+				const s = safe('pill span', () => d.createElement('span'));
+				if (!s) return;
+				s.textContent = text;
+				s.style.cssText = tone ? CHIP + TONE[tone] : 'margin:0 0 0 5px';
+				safe('pill append', () => hint.appendChild(s));
+			};
+			chip(head, null);
+			for (const t of tags) {
+				const s = stateOf(t.security);
+				chip(`${t.content || t.sid} ${s.glyph}`, s.tone);
+			}
 			hint.title = `${title}${m0.watching ? ' (watching)' : ''} — click, or Ctrl+Alt+R`;
 			hint.style.cssText = `${PILL_BASE};${css}${flashing ? ';background:#fff3b0;opacity:1' : ''}`;
 		});
@@ -192,167 +228,157 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 	// reuses name=barcode for renewal, which checks an item in *and issues it back*
 	// out with a new due date.
 	/*
-	 * Which box on this page a scanned barcode belongs in. Two things make this not
-	 * one selector:
-	 *
-	 *  - circulation.pl carries three forms with a field named `barcode`: the checkout
-	 *    box (`form#mainform`) plus the returns and renew boxes in the header. Filling
-	 *    `input[name=barcode]` there can put an item in the returns box while the
-	 *    librarian is standing at a patron's checkout.
-	 *  - renew.pl has the box the librarian uses and a hidden tab-panel copy
-	 *    (`#ren_barcode`, inside a display:none panel).
-	 *
-	 * So: the page decides which form, and the form decides which field. Verified
-	 * against tests/fixtures/circulation-pl-*.html and renew-pl-patron.html, captured
-	 * from the live fork — not against upstream templates, which differ.
-	 *
-	 * Only check-in may be posted by the plugin. `post: true` is the whole policy:
-	 * a check-in is reversible and Koha's own page reports it, while taking an item
-	 * out of the library on a scan nobody confirmed is a different class of mistake.
+	 * Which box a scan belongs in is answered by the cursor — see core/intent.js. The page
+	 * table that used to sit here could not see the header quick-boxes, which exist on
+	 * every staff page and are exactly what Koha's Alt+R / Alt+W / Alt+U focus, and it went
+	 * blind on any page it had not been told about.
 	 */
-	const PAGE_TARGETS = [
-		{ word: 'checkin', page: /circ\/returns\.pl$/, post: true },
-		{ word: 'checkout', page: /circ\/circulation\.pl$/, post: false },
-		{ word: 'renew', page: /circ\/renew\.pl$/, post: false },
-	];
+	const target = () => safe('intent', () => intentOf(win.document && win.document.activeElement));
 
-	const target = () => {
-		const path = (win.location && win.location.pathname) || '';
-		const spec = PAGE_TARGETS.find((s) => s.page.test(path));
-		if (!spec || !win.document || !win.document.forms) return null;
-		// Forms on this page that post to it and carry a barcode field. On the fixture
-		// pages the page's own box is `id="barcode"` and the header copies are
-		// `ret_barcode` / `ren_barcode`, so that id is the tie-break — it is what Koha
-		// puts on the field the librarian is meant to use.
-		const candidates = [...win.document.forms].filter(
-			(f) => spec.page.test(f.getAttribute('action') || '') && f.elements && f.elements['barcode'],
-		);
-		const form = candidates.find((f) => f.elements['barcode'].id === 'barcode') || candidates[0];
-		return form ? { form, field: form.elements['barcode'], word: spec.word, post: spec.post } : null;
-	};
-
-	// M1's page logic, deliberately one action deep: put a scanned barcode in the box
-	// this page uses and let the librarian press Return. Books first, because a patron
-	// card on the pad is just another 10-digit barcode as far as we know.
+	// --- what this page has already posted ------------------------------------------
 	//
-	// `replaceStale` is what makes watching useful: once the barcode in the box is no
-	// longer on the pad, whatever it referred to has been dealt with, so a tag that is
-	// on the pad should take its place. A field the page disabled — circulation.pl does
-	// exactly that while it waits for "Please confirm checkout" — is left alone: typing
-	// into it would look like readiness and submit nothing.
-	const fillScanBox = ({ replaceStale = false } = {}) =>
-		safe('fill scan box', () => {
-			if (cfg.fillCheckin === false) return;
-			const seen = (m0.tags || []).filter((t) => t.content);
-			if (!seen.length) return;
-			const t = target();
-			if (!t) return;
-			const { field, word } = t;
-			if (field.disabled) {
-				note(`${word} box disabled — page is waiting for something else`, field.id || word);
-				return;
-			}
-			if (field.value) {
-				const onPad = seen.some((x) => x.content === field.value);
-				if (onPad || !replaceStale) {
-					note(`${word} box left alone`, `holds "${field.value}"${onPad ? ' (still on the pad)' : ''}`);
-					return;
-				}
-			}
-			const pick = (cfg.bookPrefix && seen.find((x) => x.content.startsWith(cfg.bookPrefix))) || seen[0];
-			if (pick.content === field.value) return;
-			field.value = pick.content;
-			m0.filled = pick.content;
-			safe('focus', () => field.focus && field.focus());
-			note(`${word} box filled`, `${pick.content} (sid ${pick.sid}) from ${seen.length} tag(s) on the pad`);
-		});
+	// A transaction is a page load, and the book does not leave the pad during one. With no
+	// memory the new page finds the same tag under the head and posts it again — once a
+	// second, forever, renewing one item until the renewal limit refuses it. So a tag is
+	// posted once, remembered in sessionStorage because it has to survive the reload, and
+	// forgotten when the tag leaves the pad because that is a different book.
+	//
+	// The same list is what turns a stack of returns into a queue: each page load takes the
+	// first tag that has not been posted yet, so a pile of books is checked in one pass
+	// without anybody touching a keyboard.
+	const POST_KEY = 'rfid_posted';
+	const postedTtlMs = () => (cfg.postedTtl === undefined ? 45 : cfg.postedTtl) * 1000;
 
-	// --- the check-in session: one check-in outlives the page that posted it ----
-	const toast = cfg.toasts === false ? () => {} : safe('toasts', () => toasts(win)) || (() => {});
-	const sstore = {
-		getItem: (k) => safe('sessionStorage.get', () => win.sessionStorage.getItem(k)),
-		setItem: (k, v) => safe('sessionStorage.set', () => win.sessionStorage.setItem(k, v)),
-		removeItem: (k) => safe('sessionStorage.del', () => win.sessionStorage.removeItem(k)),
+	// Pruned on every read: these entries exist to stop a loop, and a loop cannot have
+	// started before the TTL has passed since the last page load.
+	const postedMap = () => {
+		let raw = null;
+		safe('sessionStorage.get', () => (raw = win.sessionStorage.getItem(POST_KEY)));
+		let map = {};
+		try {
+			map = JSON.parse(raw || '{}') || {};
+		} catch {
+			map = {};
+		}
+		for (const k of Object.keys(map)) if (now() - map[k] > postedTtlMs()) delete map[k];
+		return map;
+	};
+	const savePosted = (map) =>
+		safe('sessionStorage.set', () => win.sessionStorage.setItem(POST_KEY, JSON.stringify(map)));
+	const postedAgo = (intent, barcode) => postedMap()[intent.word + ':' + barcode] || 0;
+	const markPosted = (intent, barcode) => {
+		const map = postedMap();
+		map[intent.word + ':' + barcode] = now();
+		savePosted(map);
+	};
+	// A tag that left the pad is out of the queue and stops blocking anything.
+	const forgetPosted = (barcodes) => {
+		const gone = (barcodes || []).filter(Boolean);
+		if (!gone.length) return;
+		const map = postedMap();
+		const set = new Set(gone);
+		let changed = false;
+		for (const k of Object.keys(map)) if (set.has(k.slice(k.indexOf(':') + 1))) (delete map[k], (changed = true));
+		if (changed) savePosted(map);
 	};
 
-	// Posting is the last thing this page does: the form navigates, the reader goes
-	// with it, and the next page load picks the story up from sessionStorage.
-	const postCheckin = (barcode) =>
-		safe('post check-in', () => {
-			const t = target();
-			if (!t || !t.post) return false; // never post a checkout or a renew: see PAGE_TARGETS
-			const form = t.form;
-			form.elements['barcode'].value = barcode;
-			// The page is about to reload and the tag may not still be here when it comes
-			// back, so the write is owed from now, with the AFI as it reads at this moment.
-			const tag = (m0.tags || []).find((x) => x.content === barcode);
-			if (writes && tag) writes.owe({ barcode, sid: tag.sid, from: tag.security, to: AFI.secure });
-			stopWatch('check-in posted');
-			form.submit();
-			return true;
-		});
-
-	const AFI_INV = { [AFI.secure]: 'DA', [AFI.unsecure]: 'D7' };
-
-	// The screen a write that cannot be finished ends up on (core/alert.js). It is built
-	// before the machine that decides, because the machine hands it the button.
-	const alarm = takeover(win, {
-		beep: cfg.securityBeep !== false,
-		onAcknowledge: (barcode) => writes && writes.acknowledge(barcode),
-	});
-
-	// Assigned as soon as there is a check-in session to hang off: nothing can be owed
-	// unless a transaction was posted, and posting is already opt-in (autoCheckin), so
-	// this defaults to on. A check-in that leaves the tag describing the old state is a
-	// half-done check-in — see core/security.js for the ordering.
-	let writes = null;
-
-	/** Look at the pad and finish whatever the previous page left owed. */
-	const writeOwed = () => {
-		if (!writes) return Promise.resolve(null);
-		return writes.pad({ tags: m0.tags }).catch((e) => note('tag write loop failed', String((e && e.message) || e)));
+	/**
+	 * Tell the tag what this transaction is producing.
+	 *
+	 * Silently, and before the page goes away. Every state written here is the state the
+	 * transaction is creating — that is what makes it safe to write first, and worth the
+	 * 150 ms it costs. See the direction argument in core/intent.js for why being wrong
+	 * about one of these is loud rather than quiet.
+	 *
+	 * It answers with a promise even when there is nothing to do, because `act` must not
+	 * post until the tag has heard: posting navigates, navigation closes the serial port,
+	 * and a write still in flight is a tag silently unwritten. That is the bug this whole
+	 * rewrite exists to remove, so it is not left to a race.
+	 */
+	const fixBit = (tag, intent) => {
+		const want = intent.state ? STATES[intent.state] : null;
+		if (!want || want.afi === null) return Promise.resolve(false); // a card, or nothing to say
+		if (cfg.securityBit === false) return Promise.resolve(false);
+		if (stateOf(tag.security).afi === want.afi) return Promise.resolve(false); // already right: no write, no wear
+		if (!reader) return Promise.resolve(false);
+		return Promise.resolve()
+			.then(() => reader.writeAfi(tag.sid, want.afi))
+			.then(() => {
+				const t = (m0.tags || []).find((x) => String(x.sid).toLowerCase() === String(tag.sid).toLowerCase());
+				if (t) t.security = want.hex; // the watcher compares SIDs, so it would not notice
+				m0.lastAction = `${tag.content} now ${want.word}`;
+				note('security bit written', `${tag.content}: ${want.hex} (${want.word})`);
+				return true;
+			})
+			.catch((e) => {
+				// No warning. The pill shows the bit as the tag last reported it, which is
+				// the truth; the reason is here for whoever gets asked later.
+				note('security bit NOT written', `${tag.content} ${want.hex}: ${(e && e.message) || e}`);
+				return false;
+			});
 	};
 
-	const checkins =
-		cfg.autoCheckin === true
-			? checkinSession({
-					store: sstore,
-					now,
-					bookPrefix: cfg.bookPrefix,
-					ttlMs: ((cfg.checkinTtl || 60)) * 1000,
-					submit: postCheckin,
-					log: note,
-					onOutcome: (outcome, barcode) => {
-						m0.lastOutcome = { at: now(), barcode, ok: outcome.ok };
-						// This is the verify point the tag write waits for: Koha has answered,
-						// so the tag may now be told what just happened to it.
-						if (writes) writes.verdict({ barcode, ok: outcome.ok });
-						// Success is announced; Koha shows its own failures, in context, better
-						// than a blunter copy of them could.
-						if (outcome.ok) toast(`✓ checked in ${barcode}`);
-						paint();
-					},
-				})
-			: null;
+	/**
+	 * The one page action this plugin has, and the only asynchronous one — everything else
+	 * that awaits is the port itself. Read the pad, ask the cursor what it wants, tell the
+	 * tag, fill the box, post it. In that order, because posting navigates and takes the
+	 * port with it.
+	 *
+	 * `replaceStale` is what makes watching useful: once the barcode in the box is no longer
+	 * on the pad, whatever it referred to has been dealt with, and whatever is on the pad now
+	 * takes its turn.
+	 */
+	const act = ({ replaceStale = false } = {}) => {
+		const t = target();
+		if (!t) return Promise.resolve(null); // the cursor is nowhere of ours
+		if (cfg.fill === false) return Promise.resolve(null);
+		const seen = (m0.tags || []).filter((x) => x.content);
+		if (!seen.length) return Promise.resolve(null);
 
-	if (cfg.securityUpdate !== false && checkins)
-		writes = owedSession({
-			store: sstore,
-			now,
-			graceMs: cfg.securityGraceMs || 8000,
-			alert: alarm,
-			log: note,
-			schedule: (fn, ms) => setTimeout(fn, ms),
-			onChange: () => paint(),
-			write: async ({ sid, to }) => {
-				if (!reader) throw new Error('the reader is not connected any more');
-				await reader.writeAfi(sid, to);
-				// The watcher compares SIDs, so it will not notice this on its own.
-				const t = (m0.tags || []).find((x) => String(x.sid).toLowerCase() === String(sid).toLowerCase());
-				if (t) t.security = AFI_INV[to] || t.security;
-				pulse();
-			},
+		// Books for the item boxes: a patron card under the head at a returns desk is not a
+		// return. Cards are welcome in the patron box, which is what it is for.
+		const prefix = cfg.bookPrefix || '';
+		const ours = (x) => t.kind !== 'item' || !prefix || String(x.content).startsWith(prefix);
+		const pick = seen.filter(ours).find((x) => !postedAgo(t, x.content));
+		if (!pick) {
+			note(`${t.word}: nothing to post`, `${seen.length} tag(s) on the pad, none of them new`);
+			return Promise.resolve(null);
+		}
+		// Never type over a barcode the librarian is working with. A value still on the pad
+		// is a transaction in progress; a value that is not on the pad any more is stale.
+		if (
+			t.field.value &&
+			t.field.value !== pick.content &&
+			(!replaceStale || seen.some((x) => x.content === t.field.value))
+		) {
+			note(`${t.word} box left alone`, `holds "${t.field.value}"`);
+			return Promise.resolve(null);
+		}
+
+		t.field.value = pick.content;
+		m0.filled = pick.content;
+		safe('focus', () => t.field.focus && t.field.focus());
+		note(`${t.word} box filled`, `${pick.content} (sid ${pick.sid}) from ${seen.length} tag(s) on the pad`);
+		paint();
+
+		// The tag first, then the navigation. A disabled auto-submit stops here: filling is
+		// the whole job on a workstation that wants to press Return itself.
+		return fixBit(pick, t).then(() => {
+			// Painted again because the tag may have just changed state: the pill that stays
+			// behind says what the tag says now, and after a write it should not say otherwise.
+			paint();
+			if (cfg.autoSubmit === false) {
+				m0.lastAction = `${pick.content} filled, not posted`;
+				return { word: t.word, barcode: pick.content, posted: false };
+			}
+			markPosted(t, pick.content);
+			m0.lastAction = `${t.word}: ${pick.content}`;
+			note(`${t.word} posted`, pick.content);
+			stopWatch(`${t.word} posted`);
+			safe('submit', () => t.form.submit());
+			return { word: t.word, barcode: pick.content, posted: true };
 		});
+	};
 
 	const start = async (ports) => {
 		m0.gate = 'booting';
@@ -364,22 +390,11 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 		note('gate', m0.gate);
 		paint();
 		if (m0.gate === 'ready') {
-			// The page gets the first tag either way: on returns.pl pump() is about to post
-			// it, and on every other page this is the whole job. Skipping it when auto-checkin
-			// is on meant a scan filled nothing on circulation.pl, where pump() has nothing
-			// to post and the watch may be switched off.
-			fillScanBox();
-			if (checkins) {
-				checkins.report(readCheckinResult(win.document));
-				// pump() navigates when it posts something; then the pad is not ours
-				if (!checkins.pump(m0.tags)) {
-					startWatch();
-					writeOwed(); // a write owed by the page that just reloaded
-				}
-			} else {
-				startWatch();
-				writeOwed();
-			}
+			// One tag per page load: act() posts and navigates, and the page that comes back
+			// takes the next one. When there is nothing to post the watch is the whole job, so
+			// a book put down after this page loaded is treated like one that was here already.
+			startWatch();
+			act();
 		}
 		return m0;
 	};
@@ -418,7 +433,13 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 		if (!reader) return { error: 'not connected' };
 		try {
 			const { tags } = await reader.scan();
-			return { tags: tags.map(({ sid, content, security }) => ({ sid, content, security })) };
+			return {
+				tags: tags.map(({ sid, content, security }) => ({
+					sid,
+					content,
+					security,
+				})),
+			};
 		} catch (e) {
 			return { error: String((e && e.message) || e) };
 		}
@@ -430,17 +451,10 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 	m0.connect = connect;
 	m0.stop = stop;
 	m0.inventory = () => (reader ? reader.inventory() : Promise.resolve(null));
-	// What the tags owe and what somebody agreed to leave unpaid — the two lists a shift
-	// would want if a security bit is ever disputed.
-	m0.tagWrites = () => (writes ? writes.list() : []);
-	m0.securitySkipped = () => (writes ? writes.skipped() : []);
-	// For seeing the alarm without carrying a book away: `rfidM0.showSecurityAlert()`.
-	m0.showSecurityAlert = (entries) =>
-		alarm.show(
-			entries && entries.length
-				? entries
-				: [{ barcode: (m0.tags && m0.tags[0] && m0.tags[0].content) || '1302079605', from: 'D7', to: AFI.secure, ageMs: 9000 }],
-		);
+	// What has been posted for the tags on the pad, so "why didn't it check this in twice"
+	// and "why is my book sitting there" are answerable without the log: the tag leaves the
+	// pad, or postedTtl seconds pass, and it is eligible again.
+	m0.posted = () => postedMap();
 	// --- watching: a tag put down later must not need a page reload ----------
 	let pad = null;
 
@@ -459,7 +473,12 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 			initial: m0.tags || [],
 			intervalMs: every,
 			onChange: ({ tags, added, removed }) => {
-				m0.tags = tags.map(({ sid, content, security, tag_type }) => ({ sid, content, security, tag_type }));
+				m0.tags = tags.map(({ sid, content, security, tag_type }) => ({
+					sid,
+					content,
+					security,
+					tag_type,
+				}));
 				const names = (list) => list.map((t) => t.content || t.sid).join(' ');
 				note(
 					'pad changed',
@@ -467,12 +486,10 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 						` (${m0.tags.length} on the pad)`,
 				);
 				pulse();
-				if (checkins) {
-					checkins.forget(removed.map((t) => t.content));
-					if (checkins.pump(m0.tags)) return; // posted; the page is going away
-				} else fillScanBox({ replaceStale: true });
-				// A book put back on the reader is the usual way an owed write completes.
-				writeOwed();
+				// A book taken off the pad is dealt with: it leaves the queue, and whatever
+				// stayed on it gets its turn.
+				forgetPosted(removed.map((t) => t.content));
+				act({ replaceStale: true });
 			},
 			onError: (msg, n) => note(n ? `watch error #${n}` : 'watch error', msg),
 			onStop: (why) => {
@@ -515,11 +532,15 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 		if (!reader) return { error: 'not connected' };
 		try {
 			const { tags } = await reader.scan();
-			m0.tags = tags.map(({ sid, content, security, tag_type }) => ({ sid, content, security, tag_type }));
+			m0.tags = tags.map(({ sid, content, security, tag_type }) => ({
+				sid,
+				content,
+				security,
+				tag_type,
+			}));
 			note('rescan', `${m0.tags.length} tag(s) on the pad`);
 			pulse();
-			fillScanBox({ replaceStale: true });
-			writeOwed(); // "I put it back on" is exactly what this button means
+			act({ replaceStale: true });
 			return { tags: m0.tags };
 		} catch (e) {
 			return { error: String((e && e.message) || e) };
@@ -531,9 +552,20 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 	// goes through the same guard as writing a barcode onto it.
 	const program = async (sid, content, opts = {}) => {
 		if (!reader) return { error: 'not connected' };
-		if (cfg.programming !== true) return { error: 'tag programming is off for this installation (config: "programming": true)' };
-		const entry = await programTag({ reader, tags: m0.tags || [], sid, content, bookPrefix: cfg.bookPrefix, log: note, ...opts });
-		m0.writes.push(entry);
+		if (cfg.programming !== true)
+			return {
+				error: 'tag programming is off for this installation (config: "programming": true)',
+			};
+		const entry = await programTag({
+			reader,
+			tags: m0.tags || [],
+			sid,
+			content,
+			bookPrefix: cfg.bookPrefix,
+			log: note,
+			...opts,
+		});
+		m0.programs.push(entry);
 		if (!entry.error) {
 			// The SID set did not change, so the watcher would not notice this on its own.
 			const t = (m0.tags || []).find((x) => x.sid.toLowerCase() === String(sid).toLowerCase());
@@ -558,14 +590,25 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 
 	m0.scan = scan;
 	// what the plugin thinks this page's scan box is — the answer when a fill goes to
-	// the wrong place, or nowhere (three forms on circulation.pl share the field name)
+	// the wrong place, or nowhere: `null` means the cursor is not in a box this plugin acts
+	// on, which is the normal state of a staff page that is not being used to circulate
 	m0.target = () => {
 		const t = safe('target', target);
-		return t ? { page: t.word, posts: !!t.post, disabled: !!t.field.disabled, id: t.field.id || null } : null;
+		return t
+			? {
+					word: t.word,
+					kind: t.kind,
+					state: t.state,
+					posts: t.posts,
+					id: t.field.id || null,
+					disabled: !!t.field.disabled,
+					value: t.field.value,
+				}
+			: null;
 	};
 	m0.rescan = rescan;
-	m0.checkins = checkins;
-	m0.toast = toast;
+	// The one page action, exposed so it can be driven — and awaited — from a console.
+	m0.act = act;
 	m0.program = program;
 	m0.readTag = (sid) => (reader ? readTag({ reader, sid }) : Promise.resolve({ error: 'not connected' }));
 	m0.canProgram = cfg.programming === true;

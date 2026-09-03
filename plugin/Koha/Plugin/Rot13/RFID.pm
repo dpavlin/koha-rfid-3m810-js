@@ -50,10 +50,18 @@ my %DEFAULT_CONFIG = (
     # Writing to a tag destroys catalogue data if it goes to the wrong tag, so the
     # capability is off until an installation turns it on (see core/tagwrite.js).
     programming     => JSON::XS::false(),
-    # Checking items in without anyone pressing Return is an accelerator, and an
-    # unexpected one is worse than none: off until a workstation asks for it.
-    autoCheckin     => JSON::XS::false(),
-    checkinTtl      => 60,        # seconds a checked-in barcode stays "already done"
+    # A scan is submitted as soon as it is read, in whichever box has the cursor —
+    # check in, renew, check out. Switch off and the plugin fills the box and leaves
+    # Return to a human.
+    autoSubmit      => JSON::XS::true(),
+    # The tag is written to the state the focused box produces (returns -> in library,
+    # renew and check out -> on loan). Switch off to read tags and never change them.
+    securityBit     => JSON::XS::true(),
+    # Seconds a tag stays "already posted" while it sits under the head. Without this a
+    # book that has not been picked up yet is transacted again on every page load.
+    postedTtl       => 45,
+    # Fill the box at all. Off means the plugin only reports what is on the pad.
+    fill            => JSON::XS::true(),
     # The pad is not polled while the tab is not in front (Chrome also calls a window
     # that another application covers "hidden"). One workstation can override this
     # with ?rfid=keep; turn it off for all of them here.
@@ -239,8 +247,8 @@ sub intranet_js {
 
         # Only client-side keys go to the browser — pages/branches/users stay server side.
         my %client_config = map { exists $cfg->{$_} ? ($_ => $cfg->{$_}) : () }
-            qw(hint debug bookPrefix programming fillCheckin watch watchIntervalMs
-                autoCheckin checkinTtl toasts pauseWatchWhenHidden);
+            qw(hint debug bookPrefix programming fill autoSubmit securityBit postedTtl
+                watch watchIntervalMs pauseWatchWhenHidden);
 
         my $html = sprintf(
             '<script>window.RFID_CONFIG=%s;window.RFID_CONTEXT=%s;</script>',

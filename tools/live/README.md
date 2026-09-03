@@ -4,6 +4,19 @@ Every claim in `PLAN.md` about what the plugin does on a real Koha page came fro
 of these. They are scripts for `browser_execute`, kept so a claim can be re-checked in
 a minute instead of re-derived in an hour.
 
+| script | what it answers |
+|---|---|
+| `focus-map.mjs` | what fields a scan could land in, on each page — ids, forms, where they post, what Alt+R finds |
+| `intent-probe.mjs` | what the plugin says it would do with a tag for each of those boxes, and what the pill looks like |
+| `capture-circ-dom.mjs` | the page shapes into `tests/fixtures/` so they stop being memory |
+| `page-logic.mjs` | does the filled box land in the form that performs the transaction |
+| `corner-probe.mjs` | the pill's geometry: does it sit on top of anything Koha needs |
+
+`focus-map.mjs` and `intent-probe.mjs` are the pair worth knowing: the first is the page
+as it is, the second is the plugin's opinion about it, and a design change is exactly the
+gap between the two closing. Both are read-only — no posts, no tag writes — so they can run
+against a real catalogue.
+
 ## The pattern
 
 Put the body **here**, exporting `run(session, k)`, and send `browser_execute` only:

@@ -7,9 +7,10 @@ No local server, no certificate, no binary to install on library workstations.
 librarian's Chrome ──HTTPS──▶ Koha ──inlined bundle──▶ Web Serial ──▶ 3M 810
 ```
 
-Status: **M0 spike** — bootstrap, bundling and the plugin injection path are in
-place and tested; the circulation scan loop and tag programming UI are next
-(see [PLAN.md](PLAN.md)).
+Status: **M1** — a scan does the transaction the cursor is in (check in, renew, check
+out), corrects the tag's security bit to match, and reports it in the corner. Deployed on
+the ffzg dev box against a real 3M 810; tag programming is behind `programming: false`.
+See [PLAN.md](PLAN.md) for what is done and what is left.
 
 ## Why
 
@@ -29,11 +30,14 @@ retired by this.
 1. **A librarian without a reader sees nothing.** Not one byte on unenrolled
    pages/branches (Perl gate), not one DOM node or listener in unsupported or
    unarmed browsers (bootstrap gate). `tests/boot.test.mjs` asserts it.
-2. **RFID is an accelerator, never a dependency.** No dialogs, no `alert`,
-   nothing auto-focused; every failure degrades to scanning the barcode as today.
+2. **RFID is an accelerator, never a dependency.** No dialogs, no `alert`, no
+   sound. The page is acted on only where the cursor already is, and the only field
+   ever focused is one the plugin just filled on its way to posting it. Every failure
+   degrades to typing the barcode as today; `autoSubmit: false` degrades further, to
+   filling the box and leaving `Return` to a human.
 3. **One bundle, inlined.** This Koha (18.11-ffzg fork) does not serve files out
    of the plugin dir (`/plugin/…` → 404) and discovers plugins by filesystem
-   scan, so the Perl hook inlines a single esbuild IIFE (≈11 KB, 4.5 KB gzip).
+   scan, so the Perl hook inlines a single esbuild IIFE (≈23 KB, 9 KB gzip).
 
 ## Provenance
 
@@ -83,16 +87,18 @@ find — `src/` is the source.
 | `plugin/Koha/Plugin/Rot13/RFID.pm` | hooks, page/branch gating, inlines the bundle |
 | `plugin/…/koha-rfid.json` | pages, branches, users — server side, never shipped whole |
 | `plugin/…/koha-rfid.js` | **built, never written by hand** — `make bundle` puts the bundle here and the plugin inlines it; nothing named `koha-rfid.js` exists in git, and this path is gitignored |
-| `src/core/boot.js` | dormant-by-default bootstrap + opt-in (Ctrl+Alt+R, `?rfid=1`) |
-| `src/main.js` | app entry: open port, probe, scan (M1: session + page logic) |
+| `src/core/boot.js` | dormant-by-default bootstrap, the pill, and the one page action |
+| `src/core/intent.js` | cursor → transaction: what the focused box means, and what the tag should say after it |
+| `src/core/tagwrite.js` | the guard in front of every write to a tag |
+| `src/main.js` | app entry: open port, probe, scan, watch the pad |
 | `src/driver/rfid3m.js` | 3M 810 protocol (CRC-16/GENIBUS frames, RFID501) |
 | `src/transport/webserial.js` | Web Serial streams, drain loop, safe close |
-| `tests/` | hardware-free: live-capture replay, dormancy rules |
+| `tests/` | hardware-free: live-capture replay, dormancy rules, transaction routing |
 
 ## Using it
 
 ```sh
-make test             # 71 hardware-free JS tests (offline, replays a live capture)
+make test             # 79 hardware-free JS tests (offline, replays a live capture)
 make test-policy      # 29 gate tests, run on the server against this repo's RFID.pm
 make check            # bundle + test + test-policy
 make deploy           # backup on server → perl -c → install → restart plack
@@ -108,28 +114,65 @@ Same shortcut, or a click on the pill, disconnects.
 
 ### What a librarian sees
 
-The corner element is a status pill, not just a link:
+The corner element is a status pill, and it is the only feedback the plugin gives:
 
 | pill | meaning |
 |---|---|
 | `RFID —` | dormant — no port granted, nothing touched |
 | `RFID ?` | armed, waiting for one click on the device chooser |
-| `RFID ✓ 10.5.0.2 · 3` | connected, and how many tags it can read right now |
+| `RFID ✓` | connected, nothing to show (`no tag on the pad` is spelled out) |
+| `RFID ✓ 1302079605 ⇤` | connected, and what the tag under the head says |
 | `RFID !` | connected and failed; the tooltip says why |
 | `RFID ✗` | this browser has no Web Serial |
 
-A check-in that worked says so in the corner for four seconds — barcode, not title,
-because the title is already on the page and the barcode is what the librarian just
-scanned. Nothing else does: not a sound, not a beep, nothing that competes with a desk
-full of patrons. A check-in that Koha refused says nothing, because Koha has already
-put its answer where the librarian is looking.
+Every tag on the pad gets a chip: the barcode, then the security bit as an arrow — `⇤`
+in library (green), `⇥` on loan (amber), `·` unreadable. It is the one fact about a book
+that a desk cannot check any other way, and the reason the pill lists the pad instead of a
+count. Barcodes and arrows, never hex: `D7` means nothing at a desk, `on loan` does.
 
-On `returns.pl` a scan also writes the first book barcode into the check-in box and
-focuses it, so the next keypress is Return. It never submits, never touches the box
-if it already contains something (`checkin filled` / `checkin left alone` in the log
-tells you which), and `"fillCheckin": false` turns it off. Books are preferred over
-the patron card via `bookPrefix`, because a card on the pad is just another
-ten-digit barcode as far as the driver knows.
+Nothing beeps and nothing is modal. A desk full of patrons does not need to hear about a
+book, and Koha renders its own answer — not checked out, on hold, not yours to return —
+on the page the transaction just reloaded, beside the item it is about. The tooltip
+carries the rest: reader version, every tag's state, the last thing the plugin did.
+
+### What a scan does
+
+Where the cursor is, is what the scan means. The plugin reads `document.activeElement`,
+looks at which page that field's form posts to, and gets a transaction:
+
+| the box holding the cursor | transaction | the tag is written to |
+|---|---|---|
+| check-in box — `returns.pl`, or the header one | check in | in library (`DA`) |
+| renew box — `renew.pl`, or the header one | renew | on loan (`D7`) |
+| the checkout box on `circulation.pl` | check out | on loan (`D7`) |
+| the patron box (`#findborrower`) | find the patron | nothing — a card is not a book |
+| anywhere else | nothing at all | |
+
+Focus is the consent gesture, and it beats a page table: Koha's own <kbd>Alt</kbd>+<kbd>R</kbd>
+/<kbd>Alt</kbd>+<kbd>W</kbd> land in the header boxes, which is where a librarian's hands already
+are, and one page (`circulation.pl`) carries a checkout box and a header check-in box that
+are both named `barcode` and post to different pages. `src/core/intent.js` is that table;
+`tests/intent.test.mjs` is the argument for it, including the header boxes on a page
+(`mainpage.pl`) that has no circulation form of its own.
+
+Then, in this order: **the tag, the box, the page.** The tag first because posting
+navigates, navigation closes the serial port, and a write still in flight is a tag that
+silently stayed on loan. A tag that already says the right thing is not written to; a tag
+whose write failed is not complained about — the pill shows the state the tag last
+reported, `security bit NOT written` goes to the log, and Koha still gets the transaction
+that was asked for, because a bit is not worth holding a return hostage to.
+
+The page is posted — that is the point — and the page that comes back has the same book
+still under the head. So the plugin remembers for `postedTtl` seconds (in `sessionStorage`,
+so it dies with the tab and never teaches the next shift) that it already posted that
+barcode into that box: a stack is a queue, one transaction per page load, and taking the
+top book off the pad is what hands the next one its turn. A barcode in the box that is
+still on the pad is never typed over — that is a transaction in progress; a value whose tag
+has left the pad is stale and gets replaced. `rfidM0.posted()` shows the memory.
+
+Renew is in the table for a reason: a book being renewed that reads `in library` was never
+properly issued, and a renewal is the moment it is lying on a reader. Writing it to `on
+loan` is the correction, and it is the same write a checkout would do.
 
 ### Watching the pad
 
@@ -142,7 +185,7 @@ been dealt with, so a tag that *is* on the pad takes its place; a barcode still 
 the antenna is never overwritten.
 
 Polling pauses while the tab is not in front and stops when the page unloads: a
-check-in that fires on a page nobody is looking at is a surprise, and a toast nobody
+transaction that fires on a page nobody is looking at is a surprise, and a pill nobody
 sees is not feedback. Pause is not release — the tab keeps the port, because two tabs
 fighting over one reader is worse than one idle holder; `rfidM0.stop()` is how you hand
 it to a CLI. Note that Chrome also reports a window *covered by another application*
@@ -153,39 +196,41 @@ After three read failures in a row it stops by itself rather than retrying forev
 
 | config key | default | effect |
 |---|---|---|
-| `fillCheckin` | `true` | write scanned barcodes into the check-in box |
+| `fill` | `true` | type the scanned barcode into the focused box at all |
+| `autoSubmit` | `true` | post the form; `false` fills the box and leaves <kbd>Return</kbd> to a human |
+| `securityBit` | `true` | write the tag to the state the transaction is creating (one byte) |
+| `postedTtl` | `45` | seconds a tag stays "already posted" while it sits under the head |
 | `bookPrefix` | `"130"` | prefer these over patron cards when picking which barcode to type |
 | `watch` | `true` | poll the pad; `false` means one scan per page load |
 | `watchIntervalMs` | `600` | poll interval |
-| `autoCheckin` | `false` | post the check-in when a book appears on the pad; `false` fills the box and waits for Return |
-| `checkinTtl` | `60` | seconds a checked-in barcode stays "already done", so a tag left on the pad is not offered again immediately |
-| `programming` | `false` | allow writing to tags at all — the only destructive capability |
+| `programming` | `false` | allow rewriting what a tag *holds* — barcode and EPC, not just its bit |
 | `pauseWatchWhenHidden` | `true` | pause polling while the tab is not in front |
 
-### Checking items in without anyone pressing Return
+`securityBit` and `programming` are different capabilities and are switched separately:
+one sets a byte that says where the book is supposed to be, the other overwrites what the
+book is. Turning one on says nothing about the other.
 
-`returns.pl` has no API: you post a barcode and it answers with a whole new page. So
-this is a state machine that survives a reload (`src/core/checkin.js`, state in
-`sessionStorage` — it dies with the tab, so a check-in is never reported to the next
-shift), and the property it exists to guarantee is not *it posts* but **it never posts
-twice**: a check-in you cannot confirm is a check-in that also lands on the next loan
-of that item. One barcode is in flight at a time; a barcode that comes back off the
-pad is forgotten, so putting the next item down is not blocked.
+### Why the tag is written at the scan and not after
 
-Whether it worked is decided by one thing — does the page's checked-in table contain a
-*row for this barcode with a date in the due-date column*. A return leaves a date; a
-refusal leaves words: "Not checked out", "Item on hold", wording that changes between
-Koha versions. Both cases are captured in `tests/fixtures/checkedin-*.html`, and the
-refusal is the bug those fixtures exist to keep dead: the refused row carries the same
-title and the same barcode as the real one, so matching the table for the barcode
-believes Koha's own error message.
+The obvious design writes the security bit after Koha has accepted the transaction — the
+state a librarian wants is a state Koha has to agree to. It was built that way, with the
+write owed across the reload, a list of what the tags were still owed, and a takeover
+screen for a book that walked away before it was told. Then it was deleted: three pages
+of state, a machine with four ways to be half-done, and every interesting bug lived in
+the gap between the transaction and the write.
 
-Failures are not repeated to the librarian — Koha renders its own error on the page
-that just reloaded, in context, with the patron and title beside it. A success gets a
-quiet toast; everything goes to `rfidM0.log` and the pill's tooltip. And the direction
-of the one uncertainty is deliberate: if Koha renames its table, check-ins that worked
-get reported as unconfirmed (nothing is reposted, a human sees the page) rather than
-the other way round.
+Writing at the scan instead buys the whole gap back. The state is decided by the box the
+librarian chose, which is the same fact the transaction is decided by, so there is nothing
+to reconcile afterwards. What it costs is that a transaction Koha *refuses* can leave a tag
+pointing the wrong way: a book Koha would not accept is now "in library". That error is
+loud (the page says the return failed, right there, and the pill says what the tag now
+says) and it is fixed by the next successful scan of the same book, whereas the deferred
+design's failures were quiet. One byte, written 150 ms before the page goes away, against
+a state machine: the trade is worth it.
+
+Nothing here waits for the write to be confirmed by re-reading the tag: the driver's
+`writeAfi()` reads the byte back and throws if it did not take, which is what `verified`
+means. The pill showing `⇤` after a check-in is a write the reader agreed to.
 
 ### Writing to a tag
 
@@ -217,9 +262,10 @@ await rfidM0.program(cardSid, '1309999998', { confirm: '200000000042' })
 
 From the console: `rfidM0.rescan()` re-reads the pad on demand, `rfidM0.watch` holds
 the loop's counters (`polls`, `changes`, `errors`), `rfidM0.log` is everything.
-`rfidM0.tagWrites()` lists what the tags are still owed after a confirmed transaction,
-`rfidM0.securitySkipped()` what somebody agreed to leave unwritten, and
-`rfidM0.showSecurityAlert()` puts the takeover on the screen without needing a book.
+`rfidM0.target()` answers what a scan would do right now — the transaction, the state the
+tag would get, whether it posts — for whatever the cursor is in, which is the question to
+ask before blaming the plugin for a scan that did nothing. `rfidM0.act()` does it, and
+`rfidM0.posted()` says which barcodes are sitting out their `postedTtl`.
 
 ## Field notes (ffzg, Koha 18.11 fork, plack)
 

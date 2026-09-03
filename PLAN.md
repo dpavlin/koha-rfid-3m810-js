@@ -17,8 +17,9 @@ not a dependency.
 | 6 | Plugin class stays **`Koha::Plugin::Rot13::RFID`** (drop-in over the live install) |
 | 7 | **Tag programming is in scope**, driven from `catalogue/moredetail.pl` (§6) |
 | + | **Staff without a reader must see nothing at all** (§5 — first-class requirement) |
-| 8 | **The AFI is written after Koha confirms, never before** (§3.1) |
-| 9 | **A confirmed transaction whose security bit was not written takes over the screen and beeps** (§3.1) |
+| 8 | **The transaction is decided by the focused box** — and by where that box's form posts (§3.2) |
+| 9 | **The AFI is written at the scan, before the form posts** (§3.1 — supersedes "after Koha confirms", which was built and deleted) |
+| 10 | **The pill is the only feedback**: every tag on the pad, as barcode + state. No dialogs, no takeover, no sound |
 
 ## 1. Ground facts about the *actual* target (verified on koha-dev)
 
@@ -43,23 +44,26 @@ ffzg does **not** run the distro Koha. It runs a patched fork from git at
 
 ```
 koha-rfid-3m810-js/
-├── plugin/Koha/Plugin/Rot13/RFID.pm          # hooks, gating, inlines dist/koha-rfid.js
+├── plugin/Koha/Plugin/Rot13/RFID.pm       # hooks, gating, inlines the bundle
+├── plugin/Koha/Plugin/Rot13/RFID/
+│   ├── koha-rfid.json                    # config (dev values in repo)
+│   └── koha-rfid.js                      # BUILT — gitignored, never hand-edited
 ├── src/
-│   ├── driver/rfid3m.js                      # 3M 810 protocol (copied, ESM)
-│   ├── transport/webserial.js                 # port open / close / busy handling
-│   ├── transport/fake.js                      # scripted byte log — tests w/o hardware
-│   ├── core/boot.js                           # the 1 KB silent bootstrap (§5)
-│   ├── core/session.js                        # arm/connect state machine, tab ownership
-│   ├── core/state.js                          # localStorage AFI map, dedup, pending
-│   ├── core/popup.js                          # toast/panel UI, Connect, status dot
-│   ├── core/scan.js                           # rfid_scan() circulation page logic (moved)
-│   └── program/panel.js                       # moredetail.pl programming UI (§6)
-├── build/bundle.mjs                           # esbuild: core → IIFE, es2020, window.RFID
-├── tests/{driver,state,program}.test.mjs + fixtures/live-capture.txt
-├── tools/deploy.sh  tools/deploy-plugin.sh    # adapted from the Go repo, self-contained
-├── docs/{protocol,browser-support,rollout,legacy-2012-2017}.md
-├── Makefile                                   # bundle, test-js, lint, deploy, kpz
-└── README.md  LICENSE  CHANGELOG.md
+│   ├── main.js                           # entry: open, probe, scan, watch the pad
+│   ├── driver/rfid3m.js                  # 3M 810 protocol (copied, ESM)
+│   ├── transport/webserial.js            # port open / close / drain, safe close
+│   ├── core/boot.js                      # bootstrap, the pill, and the one page action
+│   ├── core/intent.js                    # focused field → transaction → wanted AFI (§3.2)
+│   └── core/tagwrite.js                  # the guard in front of writing a tag (§6)
+├── build/bundle.mjs                      # esbuild → one minified IIFE, inlined
+├── tests/                                # hardware-free; driver replays fixtures/live-capture.txt
+│   ├── intent.test.mjs                   # the routing table (§3.2)
+│   ├── transaction.test.mjs              # scan → tag, box, post — and its memory
+│   └── helpers/fakewindow.mjs            # fake DOM/serial/storage/timers, fake reader
+├── tools/{deploy,rollback}.sh  tools/live/*.mjs   # deploy + CDP probes against real Koha
+├── docs/{browser-support,usbip-reader}.md
+└── Makefile                              # bundle, test, test-policy, check, deploy, log
+└── README.md  AGENTS.md  PLAN.md  LICENSE
 ```
 
 ## 3. Runtime
@@ -82,7 +86,7 @@ boot ─→ dormant            no navigator.serial, or not armed → NOTHING hap
   logic expects (`{sid, content, security, tag_type, reader}`), so `rfid_scan()`
   moves as a **move, not a rewrite**.
 
-### 3.1 The security bit (AFI) follows Koha, never leads
+### 3.1 The security bit (AFI) follows the focused box, and is written at the scan
 
 | AFI | meaning | who cares |
 |---|---|---|
@@ -92,67 +96,80 @@ boot ─→ dormant            no navigator.serial, or not armed → NOTHING hap
 Ground truth, not memory: `koha-rfid-go/internal/rfid/reader.go:532` defines
 `AfiSecure = 0xDA` / `AfiUnsecure = 0xD7`, and tags in this library read `DA` on a shelf
 book (`tests/fixtures/live-capture.txt:19`, and `1302079605` again on 2026-09-02).
-The rule is the Go client's, restated in `koha-rfid-go/koha-workflow.md:7`:
-**Koha state takes priority over tag state; the AFI changes only after Koha confirms.**
 
-Write before the submit and three things go wrong: Koha refuses (hold, not-checked-out,
-needs-confirmation) and the tag now asserts what the catalogue denies; the previous state
-is gone, so a retry has nothing to go back to; and "did the transaction work?" loses its
-independent answer, because the only thing that changed is the thing you changed.
+**The state a tag is written to is decided by the box the librarian was looking at**:
+check-in box → `DA`, renew or checkout box → `D7`, patron box → nothing. That is the same
+fact that decides the transaction (§3.2), so a tag is never asked for a state the page is
+not producing. The write happens in `act()`, *before* the form posts; a tag that already
+reads the target state is not written to at all, which is most tags most of the time.
 
-Check-in, end to end:
+AFI is a hint, never a gate: no transaction here is filtered on it (a book reading `DA` may
+well be on loan — a write that failed a month ago), and it never decides whether to post.
+Koha decides what happened; the tag is told which state the transaction is creating.
 
-1. tag on the pad → `from` is the AFI that came back with the content (`scan()` already
-   returns `security`, no extra command);
-2. post the form, and store `rfid_afi[barcode] = { sid, from, to: 'DA', at }`;
-3. the page reloads — which is why the owed write lives in storage and not in a variable:
-   the confirmation arrives on a page that did not exist when the write was scheduled;
-4. confirmed (the date-in-column rule, §3 of `core/checkin.js`) → if the tag is still on
-   the pad, `writeAfi` (retries until the read-back matches) and clear the entry;
-5. **not** confirmed → drop the entry. Nothing is owed; the tag was never touched;
-6. confirmed and the tag is gone → the entry stays, and the takeover below fires.
+#### What the deferred design cost, and what this one accepts
 
-AFI is a hint, never a gate: check-in does not filter on it (a book reading `DA` may well
-still be on loan — a write that failed a month ago), and `DA` on checkout only suggests
-the book is in the building. Koha decides; the tag is told afterwards.
+M1a/M1b as first planned wrote the AFI *after* Koha confirmed, on the page that reload
+produced: `core/security.js` kept an owed-write list in `sessionStorage`, `core/checkin.js`
+decided "confirmed" from a date-in-a-column rule, and `core/alert.js` took the screen over
+with a beep when a book walked away unwritten. It was built, deployed to the dev box, and
+deleted the same day — three modules and about 500 lines, whose interesting bugs all lived
+in the gap between the transaction and the write: the confirmation arriving on a page that
+had no port open yet, the write owed by a page that had already navigated away, the alert
+that could not tell a librarian lifting the book from a book that left the building.
 
-The first version of this port did not write the AFI at all — `core/checkin.js` never
-called the reader, so a returned book kept the `D7` it was issued with and told every
-system that reads tags that it was still on loan. `core/security.js` (M1a) is what closes
-that. The inverse slip is the one that cannot be survived: a book on loan carrying `DA`,
-which the Go constants comment describes as "door will ignore" — so M1b writes `D7` only
-after an issue is confirmed, and never on the way in.
+Writing at the scan removes the gap and accepts one clear trade: **a transaction Koha
+refuses can leave the tag in the state the transaction would have created** — a book Koha
+would not check in now says `DA`. That error is visible (the refusal is on the page, beside
+the item), self-correcting (the next successful scan writes it again), and confined to one
+byte nothing downstream treats as truth. The deferred design's failures were quiet, and its
+loud failure mode was a takeover screen.
 
-#### The unwritten bit is the one error not to walk past
+What is not accepted is writing after the submit navigates: navigation closes the serial
+port, and a write in flight is a tag silently unwritten. Hence the order inside `act()` —
+**tag, box, page** — and `fixBit()` awaiting the driver, which reads the byte back and
+throws if it did not take.
 
-A wrong due date is corrected at the desk; a book that leaves the building while the door
-is muted for it is not noticed at all. So:
+Two consequences worth keeping in view:
 
-- **Trigger:** an owed write, confirmed by Koha, with the tag off the pad for more than
-  `securityGraceMs` (default 8 s — the librarian lifting the book to shelve it while the
-  page reloads is normal, and should be over by itself).
-- **Takeover** (`core/alert.js`, one element, `position:fixed;inset:0`, above everything):
-  the barcode in large type, what happened in one line ("Koha has it back on the shelf —
-  its security bit is still set to *on loan*"), what to do ("put it back on the reader"),
-  and live state: *not seen yet* → *seen, writing* → *done*. Not a toast: a toast is what
-  the last thing nobody read looks like.
-- **Sound:** a WebAudio oscillator, no asset, a short repeating pattern until it is over.
-  Audio needs a gesture; the click that armed the reader is one, and if the context is
-  still suspended the overlay says so and clicking it makes it loud.
-- **Only two ways out, and neither is a timer:** the tag comes back and the write verifies
-  (close, toast); or an explicit acknowledge, which drops the entry and appends to
-  `rfidM0.securitySkipped` — barcode, sid, how long it waited — with a log line saying the
-  bit was left at `D7` *deliberately*. That is a decision the librarian made, and the log
-  is where it belongs.
-- `Esc` acknowledges. A modal nobody can leave is worse than one that can be left
-  knowingly: the requirement is loud and recorded, not a cage.
-- The entry survives until it is written or acknowledged, so the same book on the pad an
-  hour later gets its write and a quiet toast instead of a shout.
+- A book renewed while reading `DA` was never properly issued; a renewal is the moment it is
+  lying on a reader, and it gets `D7`. The design corrects history here rather than
+  following it, and that is deliberate.
+- A book checked in and then carried off quickly was already `DA` before Koha answered. If
+  Koha refused the return, the door is muted for that book until somebody scans it again.
+  §9.6 (a server-side record of what each tag should say) is the only design that closes
+  that, and it needs the server. Parked, with the reason written down.
 
-Wiring: `onOutcome` in `boot.js` is the verify point, the pad updates from the watch are
-the "is it back?" signal, and `reader.writeAfi` is the only thing that touches hardware.
-The state is per browser: a book returned at desk A and carried to desk B will not shout
-there — see §9.6 for whether that needs a server-side ledger.
+### 3.2 Where a scan goes: the focused field, and where its form posts
+
+`intentOf(document.activeElement)` (`src/core/intent.js`) is the whole routing table: the
+field's form action names the transaction, the transaction names the AFI.
+
+| focused box | form posts to | transaction | tag becomes |
+|---|---|---|---|
+| `#barcode` in `form#checkin-form`, or `#ret_barcode` in the header | `circ/returns.pl` | check in | `DA` |
+| `#barcode` on `renew.pl`, or `#ren_barcode` in the header | `circ/renew.pl` | renew | `D7` |
+| `#barcode` in `form#mainform` | `circ/circulation.pl` | check out | `D7` |
+| `#findborrower` | `circ/circulation.pl` | find the patron | — (a card is not a book) |
+| anything else, or a disabled/read-only field | | nothing | |
+
+Why focus and not a page table, all three measured on the dev box (`tools/live/`):
+
+- Koha's own shortcuts focus the **header** boxes (Alt+R → `#ret_barcode`, Alt+W →
+  `#ren_barcode`, Alt+U → `#findborrower`), and those exist on pages with no circulation
+  form of their own (`mainpage.pl`). A page table sees no box there and does nothing.
+- `circulation.pl` has a checkout box and a header check-in box **both named `barcode`**,
+  posting to different pages. `name` cannot tell them apart, and the wrong one is not a
+  missed scan but a wrong transaction (`renew.pl` checks in *and issues back out*).
+- Focus is also the consent gesture the page table had no equivalent of: a scan means what
+  the librarian was aiming at, and a page nobody has clicked in is a page not to post.
+
+Then, in order: pick the tag (books before cards, by `bookPrefix`; skip any barcode already
+posted for this box within `postedTtl`), write its AFI, fill the box, post the form. The
+`postedTtl` memory is what makes posting safe to automate at all — the page comes back with
+the same book under the head, and a plugin that forgets that checks the book in again, once
+per second, forever. A barcode in the box that is still on the pad is never typed over; a
+value whose tag has gone is stale and is replaced, which is what makes a stack a queue.
 
 ## 4. Config (no plugin config table exists on this Koha)
 
@@ -163,19 +180,21 @@ there — see §9.6 for whether that needs a server-side ledger.
               "circ/renew.pl", "catalogue/moredetail.pl", "mainpage.pl"],
     "branches": [],  "users": [],  "bookPrefix": "130",
     "hint": true,        "debug": true,        "programming": true,
-    "autoCheckin": true, "checkinTtl": 60,     "toasts": true,
-    "fillCheckin": true, "watch": true, "watchIntervalMs": 600,
-    "pauseWatchWhenHidden": true,
-    "securityUpdate": true, "securityGraceMs": 8000, "securityBeep": true }
+    "fill": true,        "autoSubmit": true,   "securityBit": true, "postedTtl": 45,
+    "watch": true,       "watchIntervalMs": 600,
+    "pauseWatchWhenHidden": true }
   ```
-  The file in this repo is the **development** one, with `debug`, `programming` and
-  `autoCheckin` on to make hardware testing possible. `programming` (writing to tags)
-  and `autoCheckin` (posting without anyone pressing Return) are the two that need a
-  conscious decision per installation; both default to off in the code.
+  The file in this repo is the **development** one, with `debug` and `programming` on to
+  make hardware testing possible. `programming` — rewriting what a tag *holds* — is the
+  destructive capability and defaults to off in the code; it is a different thing from
+  `securityBit`, which sets one byte. `autoSubmit` (posting without anyone pressing
+  Return) defaults to on because a scan that does nothing is the failure mode librarians
+  reported about the 2012 template hack; `"autoSubmit": false` is the conservative install.
 - Per-browser state in `localStorage`: `rfid_armed` (this desk has a reader and may
   talk to it), `rfid_keepwatching` (`?rfid=keep`). Per-tab in `sessionStorage`:
-  `rfid_checkin` (what is in flight, so the answer survives the reload it causes), and
-  `rfid_afi` (writes owed to tags, §3.1 — it outlives the page that owed them).
+  `rfid_posted` — which barcodes were posted into which box, and when (§3.2). It has to
+  survive the reload the plugin causes and die with the tab, so it is neither a variable
+  nor localStorage; `rfidM0.posted()` reads it.
 - No syspref, no DB writes, no admin page needed to run it. There is no per-user
   preference layer yet — see §9.6, parked for the end.
 
@@ -214,15 +233,19 @@ not a dependency — when in doubt, render nothing.**
   the browser grant — harmless).
 
 **Gate D — Armed-but-no-reader must not nag.**
-  - Default UI is a **36 px status dot** in the corner: grey = dormant/connecting,
-    green = ready, amber = armed but no device, red = port busy/error.
-  - Scan results appear as a **1.5 s toast**, never a modal; the persistent panel
-    exists only after the user clicks the dot (that's also where the debug log lives).
-  - Errors never interrupt a transaction: no `alert`, no blocking dialog, no sound
-    unless `beep: true` and the failure is a write failure during programming.
-  - Nothing is auto-focused, nothing captures keystrokes — the existing
-    "scan into the barcode box with a scanner/keyboard" workflow is untouched.
-  - Optional: `?rfid=quiet` suppresses even the footer hint for the session.
+  - The UI is one corner **pill**, built from 40 characters of text and a tooltip: grey
+    `RFID —` dormant, `RFID ?` armed without a grant, green `RFID ✓` ready, `RFID !`
+    failed, `RFID ✗` no Web Serial. Everything else — reader version, each tag's state,
+    the last action, why the watch is paused — is in the `title`, not on the screen.
+  - What is on the pad is shown as chips (`1302079605 ⇤`), and that is also the whole
+    result feedback: no toast, no panel, no sound, nothing that has to be dismissed or
+    that expires while somebody is reading it. The debug log is `rfidM0.log`, in the
+    console, which is where a person who wants it already is.
+  - Errors never interrupt a transaction: no `alert`, no blocking dialog, no sound. A
+    failure is a pill that changed colour, a line in the log, and Koha's own message.
+  - The plugin takes no keystrokes and focuses nothing until it is about to post, and then
+    only the box it has just filled. A reader on the pad with the cursor anywhere else
+    changes no page at all — the keyboard workflow is untouched.
 
 Net effect for a librarian with no reader: **no visible change to Koha, at any level
 — not one byte of JS if their branch is not enrolled, not one DOM node if their
@@ -276,47 +299,49 @@ Proposal — replace the dead F4 notice with the real thing:
   (b) `userenv->{branch}` is populated for the RFID librarian (Gate A.2),
   (c) an inline bundle with `navigator.serial.getPorts()` works from the injected
   `<script>` on `returns.pl`. Any failure here changes §5's shape, so do it first.
-- **M1 core** — bootstrap + session state machine + status dot/toast + Connect,
-  scan path for returns/circulation/renew with page logic moved verbatim,
-  deploy scripts, driver capture-replay tests, README.
-  *Done:* status pill ✓, check-in autofill ✓, pad watching with appear/disappear
-detection ✓, page targets for `returns.pl` / `circulation.pl` / `renew.pl` ✓, deploy
-scripts ✓, tests ✓ (77, hardware-free).
-  Page targeting is not one selector: `circulation.pl` renders three forms with a field
-named `barcode` (the checkout box plus the returns and renew boxes in the header) and
-`renew.pl` has a hidden `#ren_barcode` in a `display:none` panel. The page picks the
-form, the form picks the field, and the tie-break is `id="barcode"` — the id Koha gives
-the field the librarian uses. Live on the reader: tag on the pad → the visible box on
-each page holds the barcode, both header copies stay empty, nothing is submitted.
-  Check-in remains the only thing the plugin may post (`PAGE_TARGETS[].post`); filling
-the checkout box is where auto-checkout would start, and it is deliberately not taken.
+- **M1 — a scan does the transaction** — ✅ built and deployed to the dev box. One page
+  action, `act()` in `core/boot.js`: read the pad, ask the cursor what it wants (§3.2),
+  write the tag's AFI, fill the box, post the form. Everything else on the page is
+  synchronous; `act()` is the only thing that awaits.
+  *Done:* pill with a chip per tag on the pad ✓, check-in/renew/checkout/patron routing by
+  form action ✓, the AFI written at the scan ✓, posted-memory so a reload does not repost ✓,
+  pad watching with appear/disappear ✓, deploy scripts ✓, 79 hardware-free tests ✓
+  (`intent.test.mjs`, `transaction.test.mjs`), `tools/live/intent-probe.mjs` to re-check the
+  routing against a real page without posting anything.
+  Two rules fell out of the design and are worth keeping written down:
+
+  - **Nothing posts without the cursor in one of our boxes.** That is what replaced
+    `PAGE_TARGETS`, and what makes posting on every circulation page safe: a page nobody has
+    clicked in is a page the plugin does not act on. It is also the only way the header
+    quick-boxes work — Koha's Alt+R / Alt+W land in boxes that exist on pages with no
+    circulation form of their own, which a page table could not see at all.
+  - **One transaction per page load, remembered in `sessionStorage`.** The pad is shared
+    state and the page comes back with the same book under the head; `postedTtl` is the
+    difference between a queue and a loop. A stack of returns left on the pad at a checkout
+    page is the hazard to keep an eye on: with the cursor in the checkout box they get
+    issued, one per load, which is what a librarian sitting at that box means, and what
+    `bookPrefix` (cards are not books) and the posted memory (no repeats) keep honest.
+
   Missing: a Connect affordance a librarian can see without being told (the pill and
   Ctrl+Alt+R are it for now).
-- **M1a — the security bit** (§3.1): ✅ done. `core/security.js` (the owed-write machine:
-  `owe` at post time → `verdict` on the page that answers → `pad()` writes `DA` to a tag
-  that is still in range, shouts about one that is not) and `core/alert.js` (the takeover:
-  covers the page, beep through the window's `AudioContext`, moving title bar, exits are
-  the verified write and an acknowledge that records; `Esc` is the button). Wiring is three
-  lines deep — `owe` in `postCheckin`, `verdict` in `onOutcome`, `pad()` after every page
-  load / pad change / `rescan()`. Config `securityUpdate` (on unless switched off — nothing
-  can be owed unless posting was opted into), `securityGraceMs`, `securityBeep`; the debug
-  surface gained `rfidM0.tagWrites()`, `rfidM0.securitySkipped()`, `rfidM0.showSecurityAlert()`.
-  Tests: `security.test.mjs` (the machine), `alert.test.mjs` (the screen), and
-  `checkin-afi.test.mjs`, which drives `install()` through three page loads — posted, then
-  confirmed with the book still there (written), then gone (screen), then back (written and
-  screen down), plus the refusal that writes nothing and makes no noise.
-- **M1b — submit everywhere, not just fill**: `circulation.pl` and `renew.pl` post as well
-  as fill (the fill-only rule in M1 was my decision, and it is being overruled — a
-  librarian scanning at a patron's page means it). Order of work is not negotiable:
-  capture the *success* states first (`#issues-table` row with a date for an issue; the
-  renewed date for a renewal; refusal shapes), because posting is the easy half and
-  knowing whether it worked is the whole problem — then `post: true` per page behind
-  `autoCheckout` / `autoRenew`, and `D7` written only after the issue is confirmed.
-  Known hazard, to design against and not discover: the pad is shared state. A stack of
-  returns still on the pad while a patron's page is open becomes, with checkout on, an
-  issue to that patron. Candidate answers: act only on tags that *arrive* while the page
-  is open (not what was already there), one write per tag per page, `bookPrefix` still
-  excludes cards.
+- **M1a / M1b as originally written — built, deployed, deleted.** The AFI was deferred
+  behind Koha's confirmation: `core/security.js` kept the owed writes in `sessionStorage`,
+  `core/checkin.js` parsed the answer page for a date in a column, `core/alert.js` took over
+  the screen and beeped when a book walked away unwritten, and `autoCheckin` decided which
+  single page was allowed to post. About 500 lines and three modules, all of it removed the
+  same day; §3.1 is the argument, and `git log` has the code.
+  What survived the deletion is the part that was right: `reader.writeAfi()` (read-modify-write
+  with a read-back that throws), the refusal to write a tag that is not on the pad, and the
+  rule that the plugin never explains a failure Koha has already announced on the page.
+- **M1b — submit everywhere, not just fill** — ✅ done, and it needed none of the plumbing
+  planned above. Every circulation box posts, on every page, behind one switch
+  (`autoSubmit`, on by default): the cursor is the per-transaction opt-in, so
+  `autoCheckout` / `autoRenew` / per-page `post:` flags would have been three ways to say
+  what focus already says. Parsing the answer page for a date in a column went the same way
+  — it exists to decide whether to perform the *deferred* write, and there is no deferred
+  write any more. Koha renders its own verdict, in context, beside the item; the plugin's
+  job is that the right barcode reached the right box and that the tag now says what the
+  transaction it started means.
 - **M2 programming** — moredetail panel + guardrails + write log + placement photo.
   *Started:* the guard (four rules, `core/tagwrite.js`), the write log (`m0.writes`),
   `programming` off by default, read-back verification ✓ — all exercised on a real
@@ -330,42 +355,53 @@ the checkout box is where auto-checkout would start, and it is deliberately not 
 ## 8. Testing without hardware
 
 1. Driver capture replay (`live-capture.txt`) — moved as-is, keeps the protocol honest.
-2. `state.test.mjs` — AFI map / 10 s dedup / pending-across-reload / stale sweep
-   against an injected fake `localStorage` (today unreachable without a live page).
-3. `program.test.mjs` — scripted `FakeTransport`: blank tag, short barcode, >16-byte
-   barcode (must refuse), foreign barcode (must refuse), write-stick failure (retry path).
-4. `security.test.mjs` — owed write appears only on a confirmed outcome, survives the
-   reload, is skipped when Koha refuses, fires when the tag returns, and the takeover
-   opens after the grace and closes on the write, never on a timer.
-5. `alert.test.mjs` — the overlay covers, beeps through an injected AudioContext, and the
-   only dismissals are the write and an acknowledge that records.
-6. Bootstrap tests: assert the dormant path touches **no DOM and no timers** — the
-   "don't bother anyone" rule becomes an executable test, not a promise.
-7. E2E against koha-dev with rodney/CDP (ported from the Go repo), plus a
-   `?rfidFake=1` mode that injects `FakeTransport` in the browser so e2e also runs
-   with the reader unplugged.
+2. `intent.test.mjs` — the routing table (§3.2), including the two shapes a page table
+   could not express: the header quick-boxes on a page with no circulation form, and one
+   page carrying two fields named `barcode` that post to different transactions.
+3. `transaction.test.mjs` — `install()` driven against a fake reader that **records what was
+   written to it**, because "the security bit was updated" is a claim about hardware. Tag
+   before box before post; no second post while the book stays on the pad; no post on the
+   page that comes back (two fake windows sharing one `sessionStorage`); a stack handed over
+   one at a time; a card that is not a book; a write that fails and transacts anyway; each
+   switch off (`fill`, `autoSubmit`, `securityBit`); a cursor anywhere else doing nothing.
+4. `tagwrite.test.mjs` — the programming guard: blank tag, short barcode, >16-byte barcode
+   (must refuse), foreign barcode (must refuse unless repeated as `confirm`), duplicate on
+   the pad (must refuse), write-stick failure (retry path).
+5. `boot.test.mjs` — the dormant path touches **no DOM, no listeners and no timers**: the
+   "don't bother anyone" rule (§5) is an executable test, not a promise. Also that a reader
+   which fails to open is reported rather than thrown, and that arming needs a gesture.
+6. `make test-policy` — the Perl gate (page/branch/user/superlibrarian), run on the server,
+   29 cases. Not JS, and not optional: it is the gate that decides who gets the bundle.
+7. Live but hardware-free: `tools/live/*.mjs` over CDP against the dev stack —
+   `intent-probe.mjs` (what the plugin thinks each box means, and the pill's geometry),
+   `focus-map.mjs` (what the boxes actually are), `page-logic.mjs`, `capture-circ-dom.mjs`
+   (fixtures). Not built: a `?rfidFake=1` mode that drives the real page with a scripted
+   reader in the browser — the node tests cover that ground without a browser.
 
 ## 9. Open questions
 
 1. Branch allowlist vs. user allowlist vs. both for Gate A.2 — what matches how
    ffzg actually assigns desks? (Both are supported; need the default.)
-2. Should the status dot be *always visible* for armed sessions, or only on
-   hover/error? (Staff being able to see "reader is asleep" at a glance is useful.)
+2. The pill is visible on every enrolled page — `RFID —` on a browser nobody has armed, and
+   that is the affordance for arming it. Worth it, or should a dormant desk see nothing until
+   `?rfid=1`? (`hint: false` hides it; nobody has asked, which is weak evidence that four
+   characters in a corner are not a cost.)
 3. Programming audit: client-side ring buffer only (v1) — acceptable, or do we want
    writes recorded in Koha (needs a `run.pl` route + a permission grant for catalogers)?
 4. Is the 2012 `moredetail.tt` patch going to stay patched in-tree, or should the new
    plugin *replace* it by hiding those notices from JS (it can, with a CSS/JS override)?
 5. `Ctrl+Alt+R` acceptable as the one memorable shortcut (and keep `F4` for programming)?
-6. Owed AFI writes are per browser (§3.1). Is that enough, or does a book that was never
-   updated need to be findable from anywhere — which means a record in Koha, and the whole
-   reason §4 exists is to not need one?
-6. **Per-user or per-browser configuration.** Today a setting has exactly two homes:
+6. A transaction Koha refused can leave the tag in the state that the refused transaction
+   would have created (§3.1), and only another scan of that same book corrects it. Enough, or
+   does "what should this tag say" need a record a second desk could ask — which means a
+   route and a table in Koha, and the whole reason §4 exists is to not need one?
+7. **Per-user or per-browser configuration.** Today a setting has exactly two homes:
    `RFID/koha-rfid.json`, which is the same for the installation and needs a deploy to
    change; and a URL parameter that writes a `localStorage` key (`?rfid=keep`,
    `?rfid=1`), which is per browser and needs knowing the URL. Nothing in between — so
-   "this librarian wants no toasts", "this desk polls slower", "keep watching even when
-   hidden" have no honest place, and `?rfid=keep` stays URL-only by decision until this
-   is settled. To brainstorm at the end, roughly in this order:
+   "this librarian wants no auto-submit", "this desk polls slower", "keep watching even
+   when hidden" have no honest place, and `?rfid=keep` stays URL-only by decision until
+   this is settled. To brainstorm at the end, roughly in this order:
    - Which keys are preferences at all, and which must stay server-side because they
      are permissions (`programming`) or enrolment (`pages`, `branches`, `users`).
    - Is server config the *ceiling* (a librarian may turn something off but never on)

@@ -94,7 +94,11 @@ export class SerialTransport {
 				this.log('read error', String(e && e.message ? e.message : e));
 			} finally {
 				this.reader = null;
-				try { reader.releaseLock(); } catch { /* already released */ }
+				try {
+					reader.releaseLock();
+				} catch {
+					/* already released */
+				}
 			}
 			if (signal.aborted) break;
 			await new Promise((r) => setTimeout(r, 20)); // port busy/closed: retry
@@ -131,7 +135,10 @@ export class SerialTransport {
 				if (i >= 0) this.waiters.splice(i, 1);
 				resolve(new Uint8Array(0));
 			}, timeoutMs);
-			const waiter = (chunk) => { clearTimeout(timer); resolve(chunk); };
+			const waiter = (chunk) => {
+				clearTimeout(timer);
+				resolve(chunk);
+			};
 			this.waiters.push(waiter);
 		});
 	}
@@ -145,7 +152,8 @@ export class SerialTransport {
 
 	/** close must never hang: the reader may be mid-command when the user hits disconnect */
 	async close() {
-		const beat = (p, ms) => Promise.race([Promise.resolve(p).catch(() => {}), new Promise((r) => setTimeout(r, ms))]);
+		const beat = (p, ms) =>
+			Promise.race([Promise.resolve(p).catch(() => {}), new Promise((r) => setTimeout(r, ms))]);
 		if (this.abort) this.abort.abort();
 		this._wakeAll();
 		// the reader held by _drain() owns the pending read(); cancel it or port.close() fails

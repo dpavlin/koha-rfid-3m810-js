@@ -12,9 +12,9 @@
 	"hint": true,
 	"bookPrefix": "130",
 	"programming": true,
-	"autoCheckin": true,
-	"securityUpdate": true,
-	"securityGraceMs": 8000,
-	"securityBeep": true,
+	"fill": true,
+	"autoSubmit": true,
+	"securityBit": true,
+	"postedTtl": 45,
 	"debug": true
 }

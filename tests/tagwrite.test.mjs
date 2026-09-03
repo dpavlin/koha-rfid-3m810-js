@@ -25,7 +25,12 @@ const pad = () => [
 ];
 
 function fakeTag({ content = '', afi = 0xda, fail = false } = {}) {
-	const state = { blocks: content ? encode501({ content }) : new Uint8Array(32), afi, fail, writes: [] };
+	const state = {
+		blocks: content ? encode501({ content }) : new Uint8Array(32),
+		afi,
+		fail,
+		writes: [],
+	};
 	const reader = {
 		state,
 		async program(list) {
@@ -55,7 +60,12 @@ function fakeTag({ content = '', afi = 0xda, fail = false } = {}) {
 }
 
 test('a tag that is not on the pad cannot be written', async () => {
-	const r = await programTag({ reader: fakeTag(), tags: pad(), sid: 'e004010012345678', content: '1309999998' });
+	const r = await programTag({
+		reader: fakeTag(),
+		tags: pad(),
+		sid: 'e004010012345678',
+		content: '1309999998',
+	});
 	assert.equal(r.verified, false);
 	assert.match(r.error, /not on the pad/);
 });
@@ -68,8 +78,24 @@ test('a malformed sid is refused before anything is sent', async () => {
 test('overwriting a patron card needs the card barcode repeated exactly', async () => {
 	const why = /not a book barcode/;
 	assert.match(guard({ tags: pad(), sid: CARD, content: '1309999998' }).error, why);
-	assert.match(guard({ tags: pad(), sid: CARD, content: '1309999998', confirm: '20000000004' }).error, why, 'a typo is not confirmation');
-	assert.ok(guard({ tags: pad(), sid: CARD, content: '1309999998', confirm: '200000000042' }).ok);
+	assert.match(
+		guard({
+			tags: pad(),
+			sid: CARD,
+			content: '1309999998',
+			confirm: '20000000004',
+		}).error,
+		why,
+		'a typo is not confirmation',
+	);
+	assert.ok(
+		guard({
+			tags: pad(),
+			sid: CARD,
+			content: '1309999998',
+			confirm: '200000000042',
+		}).ok,
+	);
 });
 
 test('a barcode already lying next to it is refused', async () => {
@@ -87,7 +113,12 @@ test('16 printable ASCII bytes is the whole tag', async () => {
 
 test('writing a book barcode to a blank tag verifies against the tag itself', async () => {
 	const reader = fakeTag();
-	const entry = await programTag({ reader, tags: pad(), sid: NEW, content: '1309999998' });
+	const entry = await programTag({
+		reader,
+		tags: pad(),
+		sid: NEW,
+		content: '1309999998',
+	});
 
 	assert.equal(entry.error, null);
 	assert.equal(entry.verified, true, 'read back from the tag, not assumed');
@@ -99,13 +130,21 @@ test('writing a book barcode to a blank tag verifies against the tag itself', as
 
 test('blanking is programming with the empty pattern, and reads back empty', async () => {
 	const reader = fakeTag({ content: '1309999998' });
-	const entry = await programTag({ reader, tags: [{ sid: NEW, content: '1309999998' }], sid: NEW, content: 'blank' });
+	const entry = await programTag({
+		reader,
+		tags: [{ sid: NEW, content: '1309999998' }],
+		sid: NEW,
+		content: 'blank',
+	});
 
 	assert.equal(entry.verified, true);
 	assert.equal(entry.content, '');
 	assert.equal(entry.afi, 'D7');
 	assert.equal(entry.empty, true);
-	assert.deepEqual(reader.state.writes.map((w) => w.content), ['blank']);
+	assert.deepEqual(
+		reader.state.writes.map((w) => w.content),
+		['blank'],
+	);
 });
 
 test('a blank that leaves the tail of the old barcode is not "verified"', async () => {
@@ -120,7 +159,12 @@ test('a blank that leaves the tail of the old barcode is not "verified"', async 
 		return { ok: 1, errors: [] };
 	};
 
-	const entry = await programTag({ reader, tags: [{ sid: NEW, content: '1309999999' }], sid: NEW, content: 'blank' });
+	const entry = await programTag({
+		reader,
+		tags: [{ sid: NEW, content: '1309999999' }],
+		sid: NEW,
+		content: 'blank',
+	});
 	assert.equal(entry.content, '', 'the 501 decoder finds an empty barcode field...');
 	assert.equal(entry.empty, false, '...but the tag is not empty');
 	assert.equal(entry.verified, false, 'so it must not be reported as blanked');
@@ -128,7 +172,12 @@ test('a blank that leaves the tail of the old barcode is not "verified"', async 
 
 test('a write that the reader reports as failed is not reported as done', async () => {
 	const reader = fakeTag({ fail: true });
-	const entry = await programTag({ reader, tags: pad(), sid: NEW, content: '1309999998' });
+	const entry = await programTag({
+		reader,
+		tags: pad(),
+		sid: NEW,
+		content: '1309999998',
+	});
 
 	assert.equal(entry.verified, false);
 	assert.match(entry.error, /simulated block write failure/);
@@ -148,7 +197,13 @@ test('readTag reports the decoded tag, read-only', async () => {
 
 test('the guard is told what it refused, so a librarian sees why', async () => {
 	const logged = [];
-	await programTag({ reader: fakeTag(), tags: pad(), sid: CARD, content: '1309999998', log: (s, v) => logged.push([s, v]) });
+	await programTag({
+		reader: fakeTag(),
+		tags: pad(),
+		sid: CARD,
+		content: '1309999998',
+		log: (s, v) => logged.push([s, v]),
+	});
 	assert.deepEqual(logged[0][0], 'program refused');
 	assert.match(logged[0][1], /repeat it as confirm/);
 });

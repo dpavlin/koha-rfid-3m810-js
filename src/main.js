@@ -26,7 +26,12 @@ export async function boot({ port, log = () => {} }) {
 		r = new Reader3M(t, { log });
 		out.readerVersion = await r.probe();
 		const { tags } = await r.scan();
-		out.tags = tags.map(({ sid, content, security, tag_type }) => ({ sid, content, security, tag_type }));
+		out.tags = tags.map(({ sid, content, security, tag_type }) => ({
+			sid,
+			content,
+			security,
+			tag_type,
+		}));
 	} catch (e) {
 		out.error = String((e && e.message) || e);
 		// Chrome says "Failed to open serial port" and stops there. On a workstation

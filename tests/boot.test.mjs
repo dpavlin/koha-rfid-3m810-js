@@ -26,7 +26,10 @@ test('browser without Web Serial: nothing at all happens', async () => {
 
 test('Web Serial but never armed: opt-in affordances only, reader untouched', async () => {
 	const port = deadPort();
-	const { win, calls, storage, elements } = fakeWindow({ serial: true, ports: [port] });
+	const { win, calls, storage, elements } = fakeWindow({
+		serial: true,
+		ports: [port],
+	});
 	const m0 = install(win);
 	await m0.done;
 
@@ -35,7 +38,11 @@ test('Web Serial but never armed: opt-in affordances only, reader untouched', as
 	assert.equal(storage.rfid_armed, undefined, 'stays unarmed');
 	assert.equal(port.opens, 0, 'port never opened');
 	assert.ok(calls.listeners.includes('keydown'), 'Ctrl+Alt+R registered');
-	assert.equal(calls.createElement, 1, 'one discreet hint link');
+	// What matters is that the page gained one element. What is inside the pill — a label, a
+	// span per tag — is the pill's business, and counting nodes would make every pill change
+	// look like a regression.
+	assert.equal(calls.appended, 1, 'one discreet thing on the page');
+	assert.equal(elements[0].children.length, 1, 'the pill alone, with nothing on the pad to show');
 });
 
 test('armed but the port is gone: report it, never throw', async () => {
@@ -44,13 +51,21 @@ test('armed but the port is gone: report it, never throw', async () => {
 	const m0 = install(win);
 	await m0.done;
 
-	assert.equal(port.opens, 3, 'tried to reconnect without a gesture, a few times: a reload can race the page before it for the port');
+	assert.equal(
+		port.opens,
+		3,
+		'tried to reconnect without a gesture, a few times: a reload can race the page before it for the port',
+	);
 	assert.equal(m0.gate, 'error');
 	assert.match(m0.error, /no device attached/);
 });
 
 test('?rfid=1 arms this browser, and a remembered port is required before booting', async () => {
-	const { win, storage } = fakeWindow({ serial: true, search: '?rfid=1', ports: [] });
+	const { win, storage } = fakeWindow({
+		serial: true,
+		search: '?rfid=1',
+		ports: [],
+	});
 	const m0 = install(win);
 	await m0.done;
 
@@ -59,7 +74,11 @@ test('?rfid=1 arms this browser, and a remembered port is required before bootin
 });
 
 test('the corner element reports what the reader is doing, including failures', async () => {
-	const { win, elements } = fakeWindow({ serial: true, armed: true, ports: [deadPort()] });
+	const { win, elements } = fakeWindow({
+		serial: true,
+		armed: true,
+		ports: [deadPort()],
+	});
 	const m0 = install(win);
 	await m0.done;
 
@@ -74,7 +93,11 @@ test('the console surface survives a broken reader', async () => {
 	// Debugging a reader you cannot connect to is done by typing into devtools, so the
 	// surface has to exist even when nothing opened. A rewrite of this file once
 	// silently dropped inventory() and stop() from it — the page still looked fine.
-	const { win } = fakeWindow({ serial: true, armed: true, ports: [deadPort()] });
+	const { win } = fakeWindow({
+		serial: true,
+		armed: true,
+		ports: [deadPort()],
+	});
 	const m0 = install(win);
 	await m0.done;
 
@@ -90,7 +113,11 @@ test('keep-watching is a switch on this workstation, not a rebuild', async () =>
 	// Default is to idle while the tab is not in front. A workstation where Koha lives
 	// behind another window needs the pad to keep working there — and so does anyone
 	// testing on real hardware without the browser focused.
-	const { win, storage } = fakeWindow({ serial: true, armed: true, ports: [deadPort()] });
+	const { win, storage } = fakeWindow({
+		serial: true,
+		armed: true,
+		ports: [deadPort()],
+	});
 	const m0 = install(win);
 	await m0.done;
 
@@ -101,7 +128,11 @@ test('keep-watching is a switch on this workstation, not a rebuild', async () =>
 });
 
 test('?rfid=keep arms the reader and keeps the pad polled', async () => {
-	const { win, storage } = fakeWindow({ serial: true, search: '?rfid=keep', ports: [] });
+	const { win, storage } = fakeWindow({
+		serial: true,
+		search: '?rfid=keep',
+		ports: [],
+	});
 	const m0 = install(win);
 	await m0.done;
 
@@ -110,7 +141,11 @@ test('?rfid=keep arms the reader and keeps the pad polled', async () => {
 });
 
 test('?rfid=0 disarms and says so', async () => {
-	const { win, storage } = fakeWindow({ serial: true, armed: true, search: '?rfid=0' });
+	const { win, storage } = fakeWindow({
+		serial: true,
+		armed: true,
+		search: '?rfid=0',
+	});
 	const m0 = install(win);
 	await m0.done;
 

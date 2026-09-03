@@ -38,7 +38,14 @@ function fakeReader(script, contents = {}) {
 	};
 	r.scan = async () => {
 		r.scans++;
-		return { tags: r.sids.map((sid) => ({ sid, content: contents[sid] || null, security: 'DA', tag_type: 'label' })) };
+		return {
+			tags: r.sids.map((sid) => ({
+				sid,
+				content: contents[sid] || null,
+				security: 'DA',
+				tag_type: 'label',
+			})),
+		};
 	};
 	return r;
 }
@@ -88,13 +95,10 @@ test('a tag put down is reported once, as added, with its barcode', async () => 
 });
 
 test('a tag taken away is reported as removed, by the barcode it had', async () => {
-	const reader = fakeReader(
-		[
-			['e004010031269117', 'e00401003126a0c8'],
-			['e004010031269117'],
-		],
-		{ e004010031269117: '1302099999', e00401003126a0c8: '1302079605' },
-	);
+	const reader = fakeReader([['e004010031269117', 'e00401003126a0c8'], ['e004010031269117']], {
+		e004010031269117: '1302099999',
+		e00401003126a0c8: '1302079605',
+	});
 	const changes = [];
 	const w = watch({
 		reader,
@@ -121,7 +125,13 @@ test('one read failure is tolerated, a run of them stops the loop', async () => 
 	const reader = fakeReader([boom, boom, boom]);
 	const errors = [];
 	let stopped = null;
-	const w = watch({ reader, intervalMs: 4, maxErrors: 2, onError: (m, n) => errors.push([m, n]), onStop: (why) => (stopped = why) });
+	const w = watch({
+		reader,
+		intervalMs: 4,
+		maxErrors: 2,
+		onError: (m, n) => errors.push([m, n]),
+		onStop: (why) => (stopped = why),
+	});
 	w.start();
 	await until(() => stopped, 'the loop to give up');
 	const polls = reader.inventories;

@@ -56,7 +56,10 @@ export async function run(session, k) {
 	out.saved = { 'circulation-pl-patron.html': await save('circulation-pl-patron.html') };
 
 	// 2. issue through the page's own form — the path a librarian's scanner takes
-	await k.evaluate(session, `(function () { const i = document.getElementById('barcode'); i.value = ${JSON.stringify(ITEM)}; HTMLFormElement.prototype.submit.call(i.form); return 1; })()`);
+	await k.evaluate(
+		session,
+		`(function () { const i = document.getElementById('barcode'); i.value = ${JSON.stringify(ITEM)}; HTMLFormElement.prototype.submit.call(i.form); return 1; })()`,
+	);
 	await new Promise((r) => setTimeout(r, 3500));
 	out.afterIssue = await shape();
 	out.saved['circulation-pl-checkedout.html'] = await save('circulation-pl-checkedout.html');

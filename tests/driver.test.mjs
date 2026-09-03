@@ -19,14 +19,25 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import {
-	Reader3M, crc16, hex, unhex, concat, decode501, encode501, encodeContent,
-	blankTag, blank3M, AFI_SECURE, AFI_UNSECURE,
+	Reader3M,
+	crc16,
+	hex,
+	unhex,
+	concat,
+	decode501,
+	encode501,
+	encodeContent,
+	blankTag,
+	blank3M,
+	AFI_SECURE,
+	AFI_UNSECURE,
 } from '../src/driver/rfid3m.js';
 
 const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'live-capture.txt');
 
 const captured = (() => {
-	const tx = [], rx = [];
+	const tx = [],
+		rx = [];
 	for (const line of readFileSync(FIXTURE, 'utf8').split('\n')) {
 		const l = line.trim();
 		if (l.startsWith('>>')) tx.push(hex(unhex(l.slice(2).trim())));
@@ -61,7 +72,9 @@ class FakeTransport {
 	async read() {
 		return this.pending.length ? this.pending.shift() : new Uint8Array(0);
 	}
-	async reset() { this.resets++; }
+	async reset() {
+		this.resets++;
+	}
 }
 
 const [, CAP_INVENTORY, CAP_AFI_BOOK, CAP_BLOCKS_BOOK, CAP_AFI_CARD, CAP_BLOCKS_CARD] = captured.rx;
@@ -76,11 +89,7 @@ test('CRC-16/GENIBUS matches every frame the Go binary wrote', () => {
 		const b = unhex(frame);
 		const len = (b[1] << 8) | b[2];
 		assert.equal(b.length, len + 3, frame);
-		assert.equal(
-			crc16(b.subarray(1, len + 1)),
-			(b[len + 1] << 8) | b[len + 2],
-			frame,
-		);
+		assert.equal(crc16(b.subarray(1, len + 1)), (b[len + 1] << 8) | b[len + 2], frame);
 	}
 });
 
@@ -159,24 +168,45 @@ test('blanking a written tag also clears the tail of the old barcode', async () 
 
 test('scan() returns the same JSON as GET /scan/', async () => {
 	const t = new FakeTransport([
-		wire(CAP_INVENTORY), wire(CAP_AFI_BOOK), wire(CAP_BLOCKS_BOOK),
-		wire(CAP_AFI_CARD), wire(CAP_BLOCKS_CARD),
+		wire(CAP_INVENTORY),
+		wire(CAP_AFI_BOOK),
+		wire(CAP_BLOCKS_BOOK),
+		wire(CAP_AFI_CARD),
+		wire(CAP_BLOCKS_CARD),
 	]);
 	assert.deepEqual((await new Reader3M(t).scan()).tags, [
-		{ sid: 'e004010031269117', content: '1302099999', security: 'DA', tag_type: 'RFID501', reader: '3M810' },
-		{ sid: 'e00401001f77fb98', content: '200000000042', security: 'DA', tag_type: 'RFID501', reader: '3M810' },
+		{
+			sid: 'e004010031269117',
+			content: '1302099999',
+			security: 'DA',
+			tag_type: 'RFID501',
+			reader: '3M810',
+		},
+		{
+			sid: 'e00401001f77fb98',
+			content: '200000000042',
+			security: 'DA',
+			tag_type: 'RFID501',
+			reader: '3M810',
+		},
 	]);
 });
 
 test('scan() survives a tag that stops answering mid-read', async () => {
 	const t = new FakeTransport([
 		wire(CAP_INVENTORY),
-		wire('0a06e004010031269117'),  // AFI read reports an error status
+		wire('0a06e004010031269117'), // AFI read reports an error status
 		wire(CAP_INVENTORY.replace(/^.{10}/, 'fe00000500')), // nothing else answers
 	]);
 	const { tags } = await new Reader3M(t, { log: () => {} }).scan();
 	assert.equal(tags.length, 2);
-	assert.deepEqual(tags[0], { sid: 'e004010031269117', content: '', security: '', tag_type: 'RFID501', reader: '3M810' });
+	assert.deepEqual(tags[0], {
+		sid: 'e004010031269117',
+		content: '',
+		security: '',
+		tag_type: 'RFID501',
+		reader: '3M810',
+	});
 });
 
 test('secure() writes AFI and verifies it', async () => {
@@ -203,20 +233,32 @@ test('program() rejects content longer than RFID501 holds', async () => {
 
 /** program()/secure() policy without the wire: record the primitives */
 class Recording extends Reader3M {
-	constructor() { super(new FakeTransport([]), { log: () => {} }); this.calls = []; }
-	async writeBlocks(sid, data) { this.calls.push(['blocks', sid, hex(data)]); }
-	async writeAfi(sid, afi) { this.calls.push(['afi', sid, afi]); }
-	async readAfi() { return AFI_SECURE; }
+	constructor() {
+		super(new FakeTransport([]), { log: () => {} });
+		this.calls = [];
+	}
+	async writeBlocks(sid, data) {
+		this.calls.push(['blocks', sid, hex(data)]);
+	}
+	async writeAfi(sid, afi) {
+		this.calls.push(['afi', sid, afi]);
+	}
+	async readAfi() {
+		return AFI_SECURE;
+	}
 }
 
 test('program() picks AFI by content and blanks clear it', async () => {
 	const p = new Recording();
 	await p.program([
-		{ sid: 'e004010031269117', content: '1302099999' },   // item barcode -> secure
+		{ sid: 'e004010031269117', content: '1302099999' }, // item barcode -> secure
 		{ sid: 'E00401001F77FB98', content: '200000000042' }, // patron card -> unsecure
 		{ sid: 'E00401003126A0C8', content: 'blank' },
 	]);
-	assert.deepEqual(p.calls.map((c) => c[0]), ['blocks', 'afi', 'blocks', 'afi', 'blocks', 'afi']);
+	assert.deepEqual(
+		p.calls.map((c) => c[0]),
+		['blocks', 'afi', 'blocks', 'afi', 'blocks', 'afi'],
+	);
 	assert.equal(p.calls[1][2], AFI_SECURE);
 	assert.equal(p.calls[3][2], AFI_UNSECURE);
 	assert.equal(p.calls[5][2], AFI_UNSECURE, 'a blank tag must never be secured');
@@ -239,14 +281,14 @@ test('program() keeps going after one tag fails and reports it', async () => {
 	]);
 	assert.equal(res.ok, 0);
 	assert.deepEqual(res.errors, ['tag not found']);
-	assert.ok(p.calls.some((c) => c[0] === 'afi'), 'second tag still programmed');
+	assert.ok(
+		p.calls.some((c) => c[0] === 'afi'),
+		'second tag still programmed',
+	);
 });
 
-test('queued commands each get their own response, never the other\'s', async () => {
-	const t = new FakeTransport([
-		wire('fe00000501e004010031269117'),
-		wire('fe00000501e00401001f77fb98'),
-	]);
+test("queued commands each get their own response, never the other's", async () => {
+	const t = new FakeTransport([wire('fe00000501e004010031269117'), wire('fe00000501e00401001f77fb98')]);
 	const r = new Reader3M(t, { log: () => {} });
 	const [a, b] = await Promise.all([r.inventory(), r.inventory()]);
 	assert.deepEqual(a, ['e004010031269117']);

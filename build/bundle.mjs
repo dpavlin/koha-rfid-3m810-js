@@ -27,7 +27,9 @@ await build({
 	minify,
 	charset: 'utf8',
 	legalComments: 'none',
-	banner: { js: `/* koha-rfid-3m810-js v${pkg.version} ${minify ? '' : '(debug) '}built ${new Date().toISOString()} */` },
+	banner: {
+		js: `/* koha-rfid-3m810-js v${pkg.version} ${minify ? '' : '(debug) '}built ${new Date().toISOString()} */`,
+	},
 });
 
 const js = readFileSync(out, 'utf8');

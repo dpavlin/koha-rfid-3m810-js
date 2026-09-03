@@ -17,7 +17,8 @@ function fakePort({ openFailures = 0, closeError = null } = {}) {
 	const port = { opens: 0, closes: 0, readable: null, writable: null };
 	port.open = async () => {
 		port.opens++;
-		if (port.opens <= openFailures) throw new Error("Failed to execute 'open' on 'SerialPort': Failed to open serial port.");
+		if (port.opens <= openFailures)
+			throw new Error("Failed to execute 'open' on 'SerialPort': Failed to open serial port.");
 		port.readable = {
 			getReader: () => {
 				let done;
@@ -28,7 +29,9 @@ function fakePort({ openFailures = 0, closeError = null } = {}) {
 				};
 			},
 		};
-		port.writable = { getWriter: () => ({ write: async () => {}, releaseLock() {} }) };
+		port.writable = {
+			getWriter: () => ({ write: async () => {}, releaseLock() {} }),
+		};
 	};
 	port.close = async () => {
 		port.closes++;
@@ -48,7 +51,11 @@ test('a port that is busy is opened on the next try, not reported as broken', as
 
 	assert.equal(port.opens, 3, 'tried again instead of giving up');
 	assert.ok(t.abort, 'the reader is draining');
-	assert.equal(log.filter((l) => l.startsWith('open retry')).length, 2, 'the retries are visible, the success is quiet');
+	assert.equal(
+		log.filter((l) => l.startsWith('open retry')).length,
+		2,
+		'the retries are visible, the success is quiet',
+	);
 	await t.close();
 });
 
@@ -88,7 +95,10 @@ test('a port that refuses to close is given up on, and nothing throws', async ()
 
 test('a port held by another tab says what to do about it', async () => {
 	const { boot } = await import('../src/main.js');
-	const { out } = await boot({ port: fakePort({ openFailures: 99 }), log: () => {} });
+	const { out } = await boot({
+		port: fakePort({ openFailures: 99 }),
+		log: () => {},
+	});
 	assert.match(out.error, /Failed to open serial port/, 'Chrome wording is kept');
 	assert.match(out.error, /another tab/, 'and the reason is spelled out');
 });

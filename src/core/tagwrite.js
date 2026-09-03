@@ -33,12 +33,20 @@ export function guard({ tags = [], sid, content, confirm = null, bookPrefix = '1
 	if (!SID.test(String(sid))) return { ok: false, error: `sid must be 16 hex digits, got "${sid}"` };
 	const wanted = sid.toLowerCase();
 	const tag = tags.find((t) => t.sid.toLowerCase() === wanted);
-	if (!tag) return { ok: false, error: `${sid} is not on the pad — put the tag you mean under the antenna` };
+	if (!tag)
+		return {
+			ok: false,
+			error: `${sid} is not on the pad — put the tag you mean under the antenna`,
+		};
 
 	if (typeof content !== 'string' || !content.length) return { ok: false, error: 'no content given' };
 	if (BLANKS.includes(content.toLowerCase())) return { ok: true, blank: true, tag };
 
-	if (content.length > 16) return { ok: false, error: `"${content}" is ${content.length} characters; RFID501 holds 16` };
+	if (content.length > 16)
+		return {
+			ok: false,
+			error: `"${content}" is ${content.length} characters; RFID501 holds 16`,
+		};
 	if (!PRINTABLE.test(content)) return { ok: false, error: 'content must be printable ASCII' };
 
 	const here = tag.content || '';
@@ -52,7 +60,11 @@ export function guard({ tags = [], sid, content, confirm = null, bookPrefix = '1
 	}
 
 	const twin = tags.find((t) => t.sid.toLowerCase() !== wanted && t.content === content);
-	if (twin) return { ok: false, error: `"${content}" is already on the pad (${twin.sid}) — that would be a duplicate barcode` };
+	if (twin)
+		return {
+			ok: false,
+			error: `"${content}" is already on the pad (${twin.sid}) — that would be a duplicate barcode`,
+		};
 
 	return { ok: true, tag };
 }
@@ -74,7 +86,15 @@ export async function programTag({
 	log = () => {},
 	now = () => Date.now(),
 } = {}) {
-	const entry = { at: now(), sid: sid.toLowerCase(), from: null, to: content, afi: null, verified: false, error: null };
+	const entry = {
+		at: now(),
+		sid: sid.toLowerCase(),
+		from: null,
+		to: content,
+		afi: null,
+		verified: false,
+		error: null,
+	};
 
 	const allow = guard({ tags, sid, content, confirm, bookPrefix });
 	if (!allow.ok) {
@@ -94,7 +114,10 @@ export async function programTag({
 		// blank that means empty all the way down: a blank that only cleared the head
 		// of a written tag leaves the old barcode's tail behind and is not blank.
 		entry.verified = BLANKS.includes(String(content).toLowerCase()) ? entry.empty : entry.content === content;
-		log('programmed', `${sid} ${entry.from || '(blank)'} -> ${content} (afi ${entry.afi}, ${entry.verified ? 'verified' : 'NOT VERIFIED'})`);
+		log(
+			'programmed',
+			`${sid} ${entry.from || '(blank)'} -> ${content} (afi ${entry.afi}, ${entry.verified ? 'verified' : 'NOT VERIFIED'})`,
+		);
 	} catch (e) {
 		entry.error = String((e && e.message) || e);
 		log('program failed', `${sid}: ${entry.error}`);

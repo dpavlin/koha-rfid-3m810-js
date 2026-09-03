@@ -23,14 +23,53 @@ Polling pauses while the tab is not in front (`?rfid=keep` overrides); a tab dri
 CDP while backgrounded sees no scans until you ask for it. That is a feature: nobody
 gets checked in behind their own screen.
 
+## Formatting is `.prettierrc.json`, and running prettier without it rewrites the repo
+
+Tabs, `tabWidth: 4`, single quotes, `printWidth: 120` — the settings the existing files were
+formatted with, now pinned in `.prettierrc.json`. `npx prettier --write` before that file
+existed used prettier's defaults (2 spaces, double quotes) and reformatted every file in
+`src/` and `tests/`, which buried a 300-line change under 1,200 lines of indentation and had
+to be undone by writing the config and re-running. Check formatting config before blaming a
+tool for a large diff.
+
+## The cursor is the routing decision — read the form, never the field name or the page
+
+A scanned tag does what the focused box does, and `intentOf()` decides that from **which
+page the field's form posts to**. Field ids and paths are both traps that have already cost
+time here:
+
+- `name=barcode` is the check-in box, the renew box and the checkout box on one page, and
+  `renew.pl` checks an item in **and issues it back out** — routing by `name` is a silent
+  data-corruption bug.
+- `#barcode` is not only the body box: the header quick-boxes are `#ret_barcode` and
+  `#ren_barcode`, they exist on pages that have no circulation forms of their own
+  (`mainpage.pl`), and Koha's Alt+R / Alt+W focus them. A page table could not see them.
+- `circulation.tt` renders `#barcode` **disabled** under `NEEDSCONFIRMATION`; filling a box
+  the page switched off looks like readiness. `intentOf` returns null for it.
+
+The corollary for tests: `tests/helpers/fakewindow.mjs` back-links `field.form`, because a
+fake DOM without that link cannot express the only ambiguity that matters.
+
+## Nothing may post before the tag finishes writing
+
+`form.submit()` navigates, navigation unloads the page, unloading closes the serial port,
+and a write still in flight is a tag that silently kept the wrong security bit — the failure
+this whole design was chosen to remove. So `act()` is the only async page action, and it
+chains `fixBit()` **before** `post()`; everything else in `boot.js` is synchronous on
+purpose. Do not make `act()` fire-and-forget because the await "does nothing".
+
 ## A test suite that prints results and never exits is holding a timer
 
 Every browser surface is reached through the injected `win` — serial ports, storage,
-`setInterval`. A module that grabs `globalThis.setInterval` behind the fake window's back
-schedules a **real** interval in tests, and `node --test` then prints its results and hangs
-until the timeout, which looks exactly like a slow machine (this cost a debugging session
-on the security-bit alert). `tests/helpers/fakewindow.mjs` fakes and records the timers, so
-an accidental global one shows up as a missing handle, not as a mysterious 120 s run.
+timers. A module that grabs `globalThis.setInterval` behind the fake window's back schedules
+a **real** interval in tests, and `node --test` then prints its results and hangs until the
+timeout, which looks exactly like a slow machine.
+
+The live version of this trap: `watch()` in `src/main.js` uses the global `setTimeout`, not
+the window's. Any test that installs against a *ready* reader therefore starts a real timer
+chain unless the config says `watch: false` — which is what `tests/transaction.test.mjs`
+passes. `tests/helpers/fakewindow.mjs` fakes and records the window's timers, so an
+accidental global one shows up as a missing handle rather than a mysterious 120 s run.
 
 ## Where the fork's own code lives (read templates there, not /usr/share)
 

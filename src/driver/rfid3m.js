@@ -24,7 +24,7 @@
  * (poly 0x1021, init 0xFFFF, xorout 0xFFFF, no reflection); prefix excluded.
  */
 
-export const AFI_SECURE = 0xda;   // item checked in
+export const AFI_SECURE = 0xda; // item checked in
 export const AFI_UNSECURE = 0xd7; // item on loan
 
 const PROBE_FRAME = new Uint8Array([0xd5, 0x00, 0x05, 0x04, 0x00, 0x11, 0x8c, 0x66]);
@@ -58,7 +58,10 @@ export const unhex = (s) => new Uint8Array((s.replace(/ /g, '').match(/../g) || 
 export const concat = (parts) => {
 	const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
 	let o = 0;
-	for (const p of parts) { out.set(p, o); o += p.length; }
+	for (const p of parts) {
+		out.set(p, o);
+		o += p.length;
+	}
 	return out;
 };
 
@@ -71,9 +74,17 @@ export const concat = (parts) => {
 //   block 7    zero
 
 export const ITEM_TYPES = {
-	0: 'Other', 1: 'Book', 2: 'Magazine', 3: 'Bound Journal', 4: 'Audio Tape',
-	5: 'Video', 6: 'CD/CD ROM', 7: 'Diskette', 8: 'Book with Diskette',
-	9: 'Book with CD/CD ROM', 13: 'Book with Audio Tape',
+	0: 'Other',
+	1: 'Book',
+	2: 'Magazine',
+	3: 'Bound Journal',
+	4: 'Audio Tape',
+	5: 'Video',
+	6: 'CD/CD ROM',
+	7: 'Diskette',
+	8: 'Book with Diskette',
+	9: 'Book with CD/CD ROM',
+	13: 'Book with Audio Tape',
 };
 
 const u32 = (n) => new Uint8Array([(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff]);
@@ -93,13 +104,13 @@ export function decode501(blocks) {
 		content: String.fromCharCode.apply(null, ascii.subarray(0, end)),
 		branch: (brlib >>> 20) & 0xfff,
 		library: brlib & 0xfffff,
-		custom: ((d[24] << 24) | (d[25] << 16) | (d[26] << 8) | d[27]) | 0,
+		custom: (d[24] << 24) | (d[25] << 16) | (d[26] << 8) | d[27] | 0,
 	};
 }
 
 /** encode({content, type, set=1, total=1, branch, library, custom}) -> 32 bytes */
 export function encode501(o) {
-	const type = o.type != null ? o.type : (o.content.startsWith('130') ? 1 : 0);
+	const type = o.type != null ? o.type : o.content.startsWith('130') ? 1 : 0;
 	const brlib = (((o.branch || 0) & 0xfff) << 20) | ((o.library || 0) & 0xfffff);
 	const barcode = new Uint8Array(16);
 	for (let i = 0; i < Math.min(16, o.content.length); i++) barcode[i] = o.content.charCodeAt(i) & 0xff;
@@ -165,7 +176,10 @@ export class Reader3M {
 		for (;;) {
 			if (!(await this._need(4, end))) throw new Error('reader timeout');
 			const len = (this.rx[1] << 8) | this.rx[2];
-			if (len < 3) { this.rx = this.rx.subarray(1); continue; }
+			if (len < 3) {
+				this.rx = this.rx.subarray(1);
+				continue;
+			}
 			if (!(await this._need(3 + len, end))) throw new Error('reader timeout');
 			const want = (this.rx[len + 1] << 8) | this.rx[len + 2];
 			const got = crc16(this.rx.subarray(1, len + 1));
@@ -182,7 +196,9 @@ export class Reader3M {
 	async _lock(fn) {
 		const prev = this.tail;
 		let release;
-		this.tail = new Promise((r) => { release = r; });
+		this.tail = new Promise((r) => {
+			release = r;
+		});
 		await prev.catch(() => {});
 		try {
 			return await fn();
@@ -319,13 +335,21 @@ export class Reader3M {
 	async scan() {
 		const tags = [];
 		for (const sid of await this.scan_()) {
-			const tag = { sid, content: '', security: '', tag_type: 'RFID501', reader: '3M810' };
+			const tag = {
+				sid,
+				content: '',
+				security: '',
+				tag_type: 'RFID501',
+				reader: '3M810',
+			};
 			try {
 				tag.security = this._afiHex(await this.readAfi(sid));
 				const blocks = await this.readBlocks(sid, 0, 8);
 				const d = decode501(blocks);
 				tag.content = d ? d.content : String.fromCharCode(...blocks[0]);
-			} catch { /* tag left the field mid-read */ }
+			} catch {
+				/* tag left the field mid-read */
+			}
 			tags.push(tag);
 		}
 		return { tags };
