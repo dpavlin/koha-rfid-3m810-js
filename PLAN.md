@@ -155,9 +155,15 @@ field's form action names the transaction, the transaction names the AFI.
 
 Why focus and not a page table, all three measured on the dev box (`tools/live/`):
 
-- Koha's own shortcuts focus the **header** boxes (Alt+R → `#ret_barcode`, Alt+W →
-  `#ren_barcode`, Alt+U → `#findborrower`), and those exist on pages with no circulation
-  form of their own (`mainpage.pl`). A page table sees no box there and does nothing.
+- The **header** boxes live on pages with no circulation form of their own (`mainpage.pl`
+  has `#ret_barcode` → `returns.pl` and `#ren_barcode` → `renew.pl`). A page table sees no
+  box there and does nothing. `#ret_barcode` carries `accesskey="r"`, so Koha's check-in
+  shortcut is browser-native rather than bound in JS — the only letter key the build binds
+  at all, with `accesskey="q"` on the catalog search box; `#ren_barcode` has no key, and
+  renewal is a click on a due date. Whether the accesskey actually moves the cursor into the
+  box is **not** verified: the boxes are hidden until the header panel opens, and CDP key
+  events do not activate accesskeys (see `tools/live/accesskey-probe.mjs`). What routing
+  does once a box has the cursor is what the tests cover.
 - `circulation.pl` has a checkout box and a header check-in box **both named `barcode`**,
   posting to different pages. `name` cannot tell them apart, and the wrong one is not a
   missed scan but a wrong transaction (`renew.pl` checks in *and issues back out*).
@@ -313,8 +319,9 @@ Proposal — replace the dead F4 notice with the real thing:
   - **Nothing posts without the cursor in one of our boxes.** That is what replaced
     `PAGE_TARGETS`, and what makes posting on every circulation page safe: a page nobody has
     clicked in is a page the plugin does not act on. It is also the only way the header
-    quick-boxes work — Koha's Alt+R / Alt+W land in boxes that exist on pages with no
-    circulation form of their own, which a page table could not see at all.
+    quick-boxes work — they exist on pages with no circulation form of their own, which a
+    page table could not see at all, and they are where the header's `accesskey="r"` puts
+    the cursor.
   - **One transaction per page load, remembered in `sessionStorage`.** The pad is shared
     state and the page comes back with the same book under the head; `postedTtl` is the
     difference between a queue and a loop. A stack of returns left on the pad at a checkout
@@ -324,6 +331,22 @@ Proposal — replace the dead F4 notice with the real thing:
 
   Missing: a Connect affordance a librarian can see without being told (the pill and
   Ctrl+Alt+R are it for now).
+
+  **Verified live on the dev box, 2026-09-03** (`tools/live/intent-probe.mjs`, deployed
+  bundle, staff login, no reader attached — gate `needs-grant`, pill `RFID ?` on all four
+  pages). Focusing each box and reading `rfidM0.target()`: `#barcode` → `checkin:inLibrary`
+  on `returns.pl`, `checkout:onLoan` on `circulation.pl`, `renew:onLoan` on `renew.pl`;
+  `#findborrower` → `patron` on every page. Each page puts the cursor in its own body box on
+  load, which is why the plugin works before anyone clicks anything.
+
+  **Not verified, and now written as such:** that a keystroke moves the cursor into a header
+  box. `#ret_barcode`/`#search-form` carry `accesskey` in the markup (`tests/fixtures/` shows
+  it too) but measure `getClientRects().length === 0` until the header panel is opened, and
+  CDP `Input.dispatchKeyEvent` does not activate an accesskey — three runs, three answers,
+  which is the sound a probe makes when it is measuring itself. The header routing in
+  `intent.js` is therefore unit-tested (`intent.test.mjs`, against the captured markup) and
+  unproven against a keystroke. What would settle it is one hand on the real keyboard at the
+  real desk, which is M2 anyway.
 - **M1a / M1b as originally written — built, deployed, deleted.** The AFI was deferred
   behind Koha's confirmation: `core/security.js` kept the owed writes in `sessionStorage`,
   `core/checkin.js` parsed the answer page for a date in a column, `core/alert.js` took over

@@ -148,12 +148,17 @@ looks at which page that field's form posts to, and gets a transaction:
 | the patron box (`#findborrower`) | find the patron | nothing — a card is not a book |
 | anywhere else | nothing at all | |
 
-Focus is the consent gesture, and it beats a page table: Koha's own <kbd>Alt</kbd>+<kbd>R</kbd>
-/<kbd>Alt</kbd>+<kbd>W</kbd> land in the header boxes, which is where a librarian's hands already
-are, and one page (`circulation.pl`) carries a checkout box and a header check-in box that
-are both named `barcode` and post to different pages. `src/core/intent.js` is that table;
-`tests/intent.test.mjs` is the argument for it, including the header boxes on a page
-(`mainpage.pl`) that has no circulation form of its own.
+Focus is the consent gesture, and it beats a page table for two reasons measured on the dev
+box. The header boxes exist on pages with no circulation form of their own — `mainpage.pl`
+carries a check-in box that posts to `returns.pl` and a renew box that posts to `renew.pl`
+— so a table keyed by page sees nothing there. And one page (`circulation.pl`) carries a
+checkout box and a header check-in box that are both named `barcode` and post to different
+pages, so a table keyed by field name picks a transaction by coin toss. The header check-in
+box is Koha's <kbd>Alt</kbd>+<kbd>R</kbd> target (`accesskey="r"` in the markup, no JS
+involved); its `accesskey="q"` sibling is the catalog search box, and a tag scanned with the
+cursor there does nothing, which is the case a page table gets wrong in both directions.
+`src/core/intent.js` is that table; `tests/intent.test.mjs` is the argument for it, including
+the header boxes on a page (`mainpage.pl`) that has no circulation form of its own.
 
 Then, in this order: **the tag, the box, the page.** The tag first because posting
 navigates, navigation closes the serial port, and a write still in flight is a tag that

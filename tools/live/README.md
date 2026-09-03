@@ -6,8 +6,9 @@ a minute instead of re-derived in an hour.
 
 | script | what it answers |
 |---|---|
-| `focus-map.mjs` | what fields a scan could land in, on each page — ids, forms, where they post, what Alt+R finds |
+| `focus-map.mjs` | what fields a scan could land in, on each page — ids, forms, where they post, which carry an `accesskey` |
 | `intent-probe.mjs` | what the plugin says it would do with a tag for each of those boxes, and what the pill looks like |
+| `accesskey-probe.mjs` | whether Koha's own `accesskey="r"` lands the cursor where the plugin agrees — and finds the decoy (`accesskey="q"`, the catalog search) |
 | `capture-circ-dom.mjs` | the page shapes into `tests/fixtures/` so they stop being memory |
 | `page-logic.mjs` | does the filled box land in the form that performs the transaction |
 | `corner-probe.mjs` | the pill's geometry: does it sit on top of anything Koha needs |

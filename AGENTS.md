@@ -42,8 +42,15 @@ time here:
   `renew.pl` checks an item in **and issues it back out** — routing by `name` is a silent
   data-corruption bug.
 - `#barcode` is not only the body box: the header quick-boxes are `#ret_barcode` and
-  `#ren_barcode`, they exist on pages that have no circulation forms of their own
-  (`mainpage.pl`), and Koha's Alt+R / Alt+W focus them. A page table could not see them.
+  `#ren_barcode`, and they exist on pages that have no circulation forms of their own
+  (`mainpage.pl`). A page table could not see them. `#ret_barcode` is `accesskey="r"`,
+  `#search-form` is `accesskey="q"`, and **nothing else has a letter key** — this Koha binds
+  no Alt+letter in JS (checked with `jQuery._data(document,'events')`), so there is no Alt+W
+  for renew and no Alt+U for patrons, and a probe that presses them proves nothing.
+  Those two boxes are also `getClientRects().length === 0` until the header panel opens, so
+  `el.focus()` silently fails on them and `document.activeElement` keeps reporting the box
+  that still has the cursor: a probe that focuses every box it finds will report the same
+  intent twice and read it as a routing bug. Report `focused` and `visible` per row.
 - `circulation.tt` renders `#barcode` **disabled** under `NEEDSCONFIRMATION`; filling a box
   the page switched off looks like readiness. `intentOf` returns null for it.
 
