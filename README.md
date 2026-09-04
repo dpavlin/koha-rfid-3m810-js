@@ -323,6 +323,26 @@ Things that cost an hour each, in one place:
   deletes any leftover `RFID/koha-rfid.js` on the server for that reason: with
   the old file sitting next to the bundle you cannot tell from the filesystem
   which client a page is running.
+- **Two tabs, one reader: the second says so and stops, in one sentence you can act on.** A
+  reader is opened by one document at a time. The tab that loses makes three attempts over
+  1.5 s (`transport/webserial.js`, `open()`) and then gives up, because the other holder is
+  not going to let go on its own. Chrome's part of the message is `Failed to execute 'open' on
+'SerialPort': Failed to open serial port.` — it never mentions the other tab, so the plugin
+  appends the part that matters (`main.js`). Read off a live two-tab desk, 2026-09-04, tooltip
+  on a red `RFID !`:
+
+    ```
+    reader failed: Failed to execute 'open' on 'SerialPort': Failed to open serial port.
+     — another tab or window may be holding the reader
+     — click, or Ctrl+Alt+R
+    ```
+
+    The loser's log is the same fact three times: `open retry: 1/3`, `2/3`, `gate: error`.
+    **It is terminal for that page load** — nothing retries after it — so the way to get the
+    reader in this tab is to stop the other one standing down (`?rfid=nokeep`, or close it) and
+    then reload. Both tabs behaving like this, one green and one red, is the system working: the
+    reader is never opened by two documents at once, and neither tab has to guess why.
+
 - Decisions land in `/var/log/koha/ffzg/plack-error.log` — `make log`.
 
 ## Browser support

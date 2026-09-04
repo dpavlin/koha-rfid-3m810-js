@@ -74,9 +74,17 @@ State machine (`core/session.js`), Chrome-only assumptions stated in one place:
 boot ─→ dormant            no navigator.serial, or not armed → NOTHING happens (no DOM, no timers)
      ─→ armed|disconnected no granted port → status dot only; Connect link opens requestPort()
      ─→ connecting ─→ ready        getPorts() → open → probe, no gesture needed
-     ─→ busy         port held by another tab/window → "RFID in use elsewhere" (decision 4)
-     ─→ error        no device / probe timeout → dot turns grey, backoff 1s→2s→5s, no dialogs
+     ─→ error        open failed (no device, or another tab holds it) or probe timeout
+                      → red pill, reason in the tooltip; 3 open attempts, then it stops
 ```
+
+There is no `busy` state, and this diagram used to draw one. Chrome refuses a second `open()`
+without naming whoever holds the port, so "in use elsewhere" arrives as an ordinary `error` and
+`main.js` appends the actionable half of the sentence — `— another tab or window may be holding
+the reader`. Decision 4's "explicit in use elsewhere state" is delivered by that sentence rather
+than by a state of its own, and **no backoff is implemented either**: an error is terminal for
+the page load. That is the honest cost of refusing leader election, and the message is what
+makes it survivable (quoted in README "Field notes", read off a live two-tab desk).
 
 - Poll tick stays 1 s while `ready`; **paused on `visibilitychange`** (hidden tab = no
   serial traffic) and closed on `pagehide` so the next page gets the port.
@@ -333,10 +341,12 @@ Proposal — replace the dead F4 notice with the real thing:
   synchronous; `act()` is the only thing that awaits.
   _Done:_ pill with a chip per tag on the pad ✓, check-in/renew/checkout/patron routing by
   form action ✓, the AFI written at the scan ✓, posted-memory so a reload does not repost ✓,
-  pad watching with appear/disappear ✓, deploy scripts ✓, 79 hardware-free tests ✓
-  (`intent.test.mjs`, `transaction.test.mjs`), `tools/live/intent-probe.mjs` to re-check the
-  routing against a real page without posting anything.
-  Two rules fell out of the design and are worth keeping written down:
+  pad watching with appear/disappear ✓, one action in flight so a stack shifting under the
+  head cannot post the same book twice ✓, a box that was not filled by us is never posted ✓,
+  deploy scripts ✓, 85 hardware-free tests ✓ (`intent.test.mjs`, `transaction.test.mjs`),
+  `tools/live/intent-probe.mjs` to re-check the routing against a real page without posting
+  anything.
+  Three rules fell out of the design and are worth keeping written down:
 
     - **Nothing posts without the cursor in one of our boxes.** That is what replaced
       `PAGE_TARGETS`, and what makes posting on every circulation page safe: a page nobody has
@@ -350,9 +360,30 @@ Proposal — replace the dead F4 notice with the real thing:
       page is the hazard to keep an eye on: with the cursor in the checkout box they get
       issued, one per load, which is what a librarian sitting at that box means, and what
       `bookPrefix` (cards are not books) and the posted memory (no repeats) keep honest.
+    - **The plugin posts a box only if it just filled that box.** A reader with nothing under
+      the head must not press Return on whatever is sitting in the field, and neither must a
+      scan that arrives while a librarian is typing: the value is ours or the transaction is a
+      fill, which is all the plugin did before it could post, plus a line in the log. This one
+      is written down because it was measured live — cursor in `returns.pl`'s box, a person's
+      typed barcode in it, a tag appeared on the pad, and the page posted the typed barcode.
+      Neither the typed barcode nor the tag had anything to do with the other.
 
     Missing: a Connect affordance a librarian can see without being told (the pill and
     Ctrl+Alt+R are it for now).
+
+    How two tabs behave, read off a live desk on 2026-09-04 rather than reasoned out, because it
+    looks like a fault from the losing side: the reader belongs to whichever tab opened it
+    first. The other tries three times in 1.5 s and sits at a red `RFID !` reading —
+
+    > `reader failed: Failed to execute 'open' on 'SerialPort': Failed to open serial port.`
+    > ` — another tab or window may be holding the reader — click, or Ctrl+Alt+R`
+
+    Chrome's half stops at "failed to open"; the plugin supplies the other half (`main.js`),
+    which is the whole reason nobody has to work out that the other window is the problem. No
+    backoff and no retry after that, so reload is the recovery, and `?rfid=nokeep` in the tab
+    that should stand down is the tidy version. One green pill and one red pill on one
+    workstation is the design working rather than failing: decision 4 buys "one document ever
+    owns the reader" with a sentence, and spends the leader election it refused.
 
     **Verified live on the dev box, 2026-09-03** (`tools/live/intent-probe.mjs`, deployed
     bundle, staff login, no reader attached — gate `needs-grant`, pill `RFID ?` on all four
@@ -458,3 +489,10 @@ Proposal — replace the dead F4 notice with the real thing:
       survives everything, needs a route and a write — the thing §4 exists to avoid).
     - How it is changed without a URL and without an admin page — and whether the answer
       is the status pill's context menu, or nothing at all for v1.
+8. **Should a failed open be recoverable without a reload?** Today the tab that lost the reader
+   to another tab stays red until it is reloaded (§3), and the librarian has to know that. The
+   pill already responds to a click for connect/disconnect, so "click to try again" is
+   available; a bounded auto-retry is the alternative, and it is the one that turns a desk's
+   "it's broken" into a slow fix. What argues against both: the other tab is usually a person
+   working, so retrying is a fight the librarian should win by closing a window, not by
+   waiting. Unsettled because it is a question about behaviour at a desk, not about code.
