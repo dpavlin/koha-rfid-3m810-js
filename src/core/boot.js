@@ -19,7 +19,7 @@
  *
  * When it is running it says so, in the corner, in the language of the desk: every
  * barcode on the pad and whether each one is `in library` or `on loan`, in colour, with
- * an arrow saying which way the book is going. Not the reader's firmware version, which
+ * `IN` or `OUT` saying which way the book is going. Not the reader's firmware version, which
  * nobody at a desk can act on. A reader that works but is invisible is indistinguishable
  * from a reader that is not installed, and a reader that is visible but says nothing a
  * librarian can read is nearly as bad.
@@ -131,7 +131,7 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 	let hint = null;
 
 	// The corner element is the librarian's only view of the reader, so it shows what is
-	// under the head: every barcode on the pad, and beside each one an arrow saying which
+	// under the head: every barcode on the pad, and beside each one `IN` or `OUT` saying which
 	// way that book is supposed to go, coloured the same way. The reader's firmware
 	// version is in the tooltip and on the console, where the person debugging it is.
 	const PILL_BASE =
@@ -140,8 +140,10 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 		'max-width:55vw;text-align:right';
 
 	// One chip per tag, because a stack of returns is a list and a count of them is not
-	// feedback. Green arrow in, amber arrow out; a tag whose bit the plugin cannot read
-	// gets a grey dot rather than a guess.
+	// feedback. Green `IN`, amber `OUT`; a tag whose bit the plugin cannot read gets a grey
+	// `??` rather than a guess. The word carries the meaning and the colour only repeats it —
+	// at 11px, and for the one staff member in twenty who cannot tell the two hues apart,
+	// the word is the part that survives (see STATES in core/intent.js).
 	const CHIP = 'display:inline-block;margin:0 0 0 5px;padding:0 4px;border-radius:2px;';
 	const TONE = {
 		in: 'color:#0c6b0c;background:#d8f0d8',
@@ -168,7 +170,11 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 			} else if (m0.gate === 'unsupported') {
 				head = 'RFID ✗';
 				title = 'this browser has no Web Serial — nothing will happen here';
-				css = 'opacity:.5;color:#a11111';
+				// Faded, because this is a fact about the browser and not an alarm at the desk — but
+				// legibly so: at .5 the red text sits at 2.8:1 against white, which is a smudge, and
+				// "this browser cannot use the reader" is exactly the message nobody should have to
+				// squint at. Same palette as a reader failure, at 5.6:1.
+				css = 'opacity:.85;color:#a11111;background:#fdeeee;border-color:#e6b3b3';
 			} else if (m0.gate === 'needs-grant' || m0.gate === 'cancelled') {
 				head = 'RFID ?';
 				title = 'armed, but no device chosen yet';
@@ -203,7 +209,7 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 			chip(head, null);
 			for (const t of tags) {
 				const s = stateOf(t.security);
-				chip(`${t.content || t.sid} ${s.glyph}`, s.tone);
+				chip(`${t.content || t.sid} ${s.label}`, s.tone);
 			}
 			hint.title = `${title}${m0.watching ? ' (watching)' : ''} — click, or Ctrl+Alt+R`;
 			hint.style.cssText = `${PILL_BASE};${css}${flashing ? ';background:#fff3b0;opacity:1' : ''}`;

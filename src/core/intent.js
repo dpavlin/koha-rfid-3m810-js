@@ -37,8 +37,15 @@
  */
 
 // The two states a 3M tag carries, in the words a librarian uses. `afi` is the byte the
-// driver writes; `glyph` is what the pill shows, because DA and D7 are not information
-// to anybody at a desk. U+21E4/U+21E5 are an arrow against a bar: coming in, going out.
+// driver writes; `label` is what the pill shows, because DA and D7 are not information to
+// anybody at a desk.
+//
+// Two capital letters, not a pictograph. This used to carry U+21E4/U+21E5 — an arrow against
+// a bar, coming in and going out — and at the pill's 11px monospace they smeared into one
+// grey lump. Worse, the arrow was the only difference between the green and the amber beyond
+// the hue itself, so a chip said "in" or "out" in a way that neither a small font nor a
+// red-green colour-blind eye (one staff member in twenty) could settle. `IN` and `OUT` are
+// the same fact in characters that survive both.
 export const STATES = {
 	// `hex` is how the driver reports the same byte, so a tag can be updated in the pill
 	// from what was just written to it without a second round trip to the reader.
@@ -46,14 +53,14 @@ export const STATES = {
 		afi: 0xda,
 		hex: 'DA',
 		word: 'in library',
-		glyph: '\u21e4',
+		label: 'IN',
 		tone: 'in',
 	},
 	onLoan: {
 		afi: 0xd7,
 		hex: 'D7',
 		word: 'on loan',
-		glyph: '\u21e5',
+		label: 'OUT',
 		tone: 'out',
 	},
 	// A tag that answers with something else, or nothing: shown, never guessed at.
@@ -61,7 +68,7 @@ export const STATES = {
 		afi: null,
 		hex: null,
 		word: 'no security bit',
-		glyph: '\u00b7',
+		label: '??',
 		tone: 'none',
 	},
 };

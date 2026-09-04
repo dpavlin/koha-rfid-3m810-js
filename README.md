@@ -82,18 +82,19 @@ The one name worth knowing: **`koha-rfid.js` is the bundle**, not a source file.
 built into the plugin directory and inlined into the page at request time; searching
 `git ls-files` for it is a search that ends in confusion, because there is nothing to
 find — `src/` is the source.
-| Path | What |
-|---|---|
-| `plugin/Koha/Plugin/Rot13/RFID.pm` | hooks, page/branch gating, inlines the bundle |
-| `plugin/…/koha-rfid.json` | pages, branches, users — server side, never shipped whole |
-| `plugin/…/koha-rfid.js` | **built, never written by hand** — `make bundle` puts the bundle here and the plugin inlines it; nothing named `koha-rfid.js` exists in git, and this path is gitignored |
-| `src/core/boot.js` | dormant-by-default bootstrap, the pill, and the one page action |
-| `src/core/intent.js` | cursor → transaction: what the focused box means, and what the tag should say after it |
-| `src/core/tagwrite.js` | the guard in front of every write to a tag |
-| `src/main.js` | app entry: open port, probe, scan, watch the pad |
-| `src/driver/rfid3m.js` | 3M 810 protocol (CRC-16/GENIBUS frames, RFID501) |
-| `src/transport/webserial.js` | Web Serial streams, drain loop, safe close |
-| `tests/` | hardware-free: live-capture replay, dormancy rules, transaction routing |
+
+| Path                               | What                                                                                                                                                                     |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `plugin/Koha/Plugin/Rot13/RFID.pm` | hooks, page/branch gating, inlines the bundle                                                                                                                            |
+| `plugin/…/koha-rfid.json`          | pages, branches, users — server side, never shipped whole                                                                                                                |
+| `plugin/…/koha-rfid.js`            | **built, never written by hand** — `make bundle` puts the bundle here and the plugin inlines it; nothing named `koha-rfid.js` exists in git, and this path is gitignored |
+| `src/core/boot.js`                 | dormant-by-default bootstrap, the pill, and the one page action                                                                                                          |
+| `src/core/intent.js`               | cursor → transaction: what the focused box means, and what the tag should say after it                                                                                   |
+| `src/core/tagwrite.js`             | the guard in front of every write to a tag                                                                                                                               |
+| `src/main.js`                      | app entry: open port, probe, scan, watch the pad                                                                                                                         |
+| `src/driver/rfid3m.js`             | 3M 810 protocol (CRC-16/GENIBUS frames, RFID501)                                                                                                                         |
+| `src/transport/webserial.js`       | Web Serial streams, drain loop, safe close                                                                                                                               |
+| `tests/`                           | hardware-free: live-capture replay, dormancy rules, transaction routing                                                                                                  |
 
 ## Using it
 
@@ -116,19 +117,22 @@ Same shortcut, or a click on the pill, disconnects.
 
 The corner element is a status pill, and it is the only feedback the plugin gives:
 
-| pill | meaning |
-|---|---|
-| `RFID —` | dormant — no port granted, nothing touched |
-| `RFID ?` | armed, waiting for one click on the device chooser |
-| `RFID ✓` | connected, nothing to show (`no tag on the pad` is spelled out) |
-| `RFID ✓ 1302079605 ⇤` | connected, and what the tag under the head says |
-| `RFID !` | connected and failed; the tooltip says why |
-| `RFID ✗` | this browser has no Web Serial |
+| pill                   | meaning                                                         |
+| ---------------------- | --------------------------------------------------------------- |
+| `RFID —`               | dormant — no port granted, nothing touched                      |
+| `RFID ?`               | armed, waiting for one click on the device chooser              |
+| `RFID ✓`               | connected, nothing to show (`no tag on the pad` is spelled out) |
+| `RFID ✓ 1302079605 IN` | connected, and what the tag under the head says                 |
+| `RFID !`               | connected and failed; the tooltip says why                      |
+| `RFID ✗`               | this browser has no Web Serial                                  |
 
-Every tag on the pad gets a chip: the barcode, then the security bit as an arrow — `⇤`
-in library (green), `⇥` on loan (amber), `·` unreadable. It is the one fact about a book
-that a desk cannot check any other way, and the reason the pill lists the pad instead of a
-count. Barcodes and arrows, never hex: `D7` means nothing at a desk, `on loan` does.
+Every tag on the pad gets a chip: the barcode, then the security bit as a word — `IN` in
+library (green), `OUT` on loan (amber), `??` unreadable. It is the one fact about a book that
+a desk cannot check any other way, and the reason the pill lists the pad instead of a count.
+Barcodes and plain words, never hex: `D7` means nothing at a desk, `on loan` does. Two
+capital ASCII letters rather than an arrow, on purpose: the pill is 11px monospace, and the
+word is also the only thing separating the green chip from the amber one that a colour-blind
+librarian can read.
 
 Nothing beeps and nothing is modal. A desk full of patrons does not need to hear about a
 book, and Koha renders its own answer — not checked out, on hold, not yours to return —
@@ -140,13 +144,13 @@ carries the rest: reader version, every tag's state, the last thing the plugin d
 Where the cursor is, is what the scan means. The plugin reads `document.activeElement`,
 looks at which page that field's form posts to, and gets a transaction:
 
-| the box holding the cursor | transaction | the tag is written to |
-|---|---|---|
-| check-in box — `returns.pl`, or the header one | check in | in library (`DA`) |
-| renew box — `renew.pl`, or the header one | renew | on loan (`D7`) |
-| the checkout box on `circulation.pl` | check out | on loan (`D7`) |
-| the patron box (`#findborrower`) | find the patron | nothing — a card is not a book |
-| anywhere else | nothing at all | |
+| the box holding the cursor                     | transaction     | the tag is written to          |
+| ---------------------------------------------- | --------------- | ------------------------------ |
+| check-in box — `returns.pl`, or the header one | check in        | in library (`DA`)              |
+| renew box — `renew.pl`, or the header one      | renew           | on loan (`D7`)                 |
+| the checkout box on `circulation.pl`           | check out       | on loan (`D7`)                 |
+| the patron box (`#findborrower`)               | find the patron | nothing — a card is not a book |
+| anywhere else                                  | nothing at all  |                                |
 
 Focus is the consent gesture, and it beats a page table for two reasons measured on the dev
 box. The header boxes exist on pages with no circulation form of their own — `mainpage.pl`
@@ -186,30 +190,30 @@ a few tens of milliseconds — and a full `scan()` (AFI + blocks, ~60 ms per tag
 only when the set of tags on the pad actually changed. Put a second item down and the
 pill flashes and counts 4 within half a second; take one away and it counts 3. If the
 check-in box holds a barcode that is no longer on the pad, whatever it referred to has
-been dealt with, so a tag that *is* on the pad takes its place; a barcode still under
+been dealt with, so a tag that _is_ on the pad takes its place; a barcode still under
 the antenna is never overwritten.
 
 Polling pauses while the tab is not in front and stops when the page unloads: a
 transaction that fires on a page nobody is looking at is a surprise, and a pill nobody
 sees is not feedback. Pause is not release — the tab keeps the port, because two tabs
 fighting over one reader is worse than one idle holder; `rfidM0.stop()` is how you hand
-it to a CLI. Note that Chrome also reports a window *covered by another application*
+it to a CLI. Note that Chrome also reports a window _covered by another application_
 as hidden, so a workstation that keeps Koha behind a spreadsheet can opt out with
 `?rfid=keep` (per browser) or `pauseWatchWhenHidden: false` (per installation). The
 pill's tooltip says `watch paused (tab hidden)` when this is why nothing happens.
 After three read failures in a row it stops by itself rather than retrying forever.
 
-| config key | default | effect |
-|---|---|---|
-| `fill` | `true` | type the scanned barcode into the focused box at all |
-| `autoSubmit` | `true` | post the form; `false` fills the box and leaves <kbd>Return</kbd> to a human |
-| `securityBit` | `true` | write the tag to the state the transaction is creating (one byte) |
-| `postedTtl` | `45` | seconds a tag stays "already posted" while it sits under the head |
-| `bookPrefix` | `"130"` | prefer these over patron cards when picking which barcode to type |
-| `watch` | `true` | poll the pad; `false` means one scan per page load |
-| `watchIntervalMs` | `600` | poll interval |
-| `programming` | `false` | allow rewriting what a tag *holds* — barcode and EPC, not just its bit |
-| `pauseWatchWhenHidden` | `true` | pause polling while the tab is not in front |
+| config key             | default | effect                                                                       |
+| ---------------------- | ------- | ---------------------------------------------------------------------------- |
+| `fill`                 | `true`  | type the scanned barcode into the focused box at all                         |
+| `autoSubmit`           | `true`  | post the form; `false` fills the box and leaves <kbd>Return</kbd> to a human |
+| `securityBit`          | `true`  | write the tag to the state the transaction is creating (one byte)            |
+| `postedTtl`            | `45`    | seconds a tag stays "already posted" while it sits under the head            |
+| `bookPrefix`           | `"130"` | prefer these over patron cards when picking which barcode to type            |
+| `watch`                | `true`  | poll the pad; `false` means one scan per page load                           |
+| `watchIntervalMs`      | `600`   | poll interval                                                                |
+| `programming`          | `false` | allow rewriting what a tag _holds_ — barcode and EPC, not just its bit       |
+| `pauseWatchWhenHidden` | `true`  | pause polling while the tab is not in front                                  |
 
 `securityBit` and `programming` are different capabilities and are switched separately:
 one sets a byte that says where the book is supposed to be, the other overwrites what the
@@ -226,7 +230,7 @@ the gap between the transaction and the write.
 
 Writing at the scan instead buys the whole gap back. The state is decided by the box the
 librarian chose, which is the same fact the transaction is decided by, so there is nothing
-to reconcile afterwards. What it costs is that a transaction Koha *refuses* can leave a tag
+to reconcile afterwards. What it costs is that a transaction Koha _refuses_ can leave a tag
 pointing the wrong way: a book Koha would not accept is now "in library". That error is
 loud (the page says the return failed, right there, and the pill says what the tag now
 says) and it is fixed by the next successful scan of the same book, whereas the deferred
@@ -235,7 +239,7 @@ a state machine: the trade is worth it.
 
 Nothing here waits for the write to be confirmed by re-reading the tag: the driver's
 `writeAfi()` reads the byte back and throws if it did not take, which is what `verified`
-means. The pill showing `⇤` after a check-in is a write the reader agreed to.
+means. The pill showing `IN` after a check-in is a write the reader agreed to.
 
 ### Writing to a tag
 
@@ -259,10 +263,10 @@ inherited 12-byte blank payload got caught — `m0.writes` keeps every attempt w
 `from`, `to`, `afi`, `verified` and the refusal reason.
 
 ```js
-await rfidM0.readTag('e00401003123b218')   // afi, raw blocks, decoded 501 fields
-await rfidM0.program('e00401003123b218', '1309999998')
-await rfidM0.program('e00401003123b218', 'blank')
-await rfidM0.program(cardSid, '1309999998', { confirm: '200000000042' })
+await rfidM0.readTag('e00401003123b218'); // afi, raw blocks, decoded 501 fields
+await rfidM0.program('e00401003123b218', '1309999998');
+await rfidM0.program('e00401003123b218', 'blank');
+await rfidM0.program(cardSid, '1309999998', { confirm: '200000000042' });
 ```
 
 From the console: `rfidM0.rescan()` re-reads the pad on demand, `rfidM0.watch` holds
@@ -284,7 +288,7 @@ Things that cost an hour each, in one place:
 
 - **Plugin files go under the class path**: `<pluginsdir>/Koha/Plugin/Rot13/RFID/`.
   Copying them flat next to `RFID.pm` makes the plugin log `missing koha-rfid.json`
-  and fall back to defaults — the directory *is* the lookup path.
+  and fall back to defaults — the directory _is_ the lookup path.
 - **`systemctl restart koha-plack` does nothing here** (the LSB unit reports
   `exited`). Use `sudo koha-plack --restart ffzg`; without it plack happily keeps
   serving a starman master that started six days ago and every "the plugin is
@@ -314,8 +318,8 @@ Things that cost an hour each, in one place:
 - **One plugin, one script.** This plugin injects the Web Serial bundle and
   nothing else; there is no config key to bring back the old `localhost:9000`
   polling client. `koha-rfid-go` ships that client as `Koha::Plugin::Rot13::RFID`
-  too — same class name, same path — so the two repos deploy *on top of each
-  other*, and whichever `.pm` landed last is the plugin Koha loads. `deploy.sh`
+  too — same class name, same path — so the two repos deploy _on top of each
+  other_, and whichever `.pm` landed last is the plugin Koha loads. `deploy.sh`
   deletes any leftover `RFID/koha-rfid.js` on the server for that reason: with
   the old file sitting next to the bundle you cannot tell from the filesystem
   which client a page is running.

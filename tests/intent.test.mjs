@@ -120,14 +120,22 @@ test('a box the page switched off is left switched off', () => {
 	assert.equal(intentOf(ro.elements.barcode), null);
 });
 
-test('a tag is read as a state, in words and an arrow, never as hex', () => {
+test('a tag is read as a state, in words, never as hex', () => {
 	const inLibrary = stateOf('DA');
 	const onLoan = stateOf('D7');
 	assert.equal(inLibrary.word, 'in library');
 	assert.equal(onLoan.word, 'on loan');
-	assert.equal(inLibrary.glyph, '\u21e4', 'arrow in against a bar');
-	assert.equal(onLoan.glyph, '\u21e5', 'arrow out against a bar');
+	assert.equal(inLibrary.label, 'IN');
+	assert.equal(onLoan.label, 'OUT');
 	assert.equal(onLoan.tone, 'out');
+
+	// Plain ASCII, and that is the requirement, not a style preference: the pill is 11px
+	// monospace, where the arrows this used to carry turned into one smudge, and the word is
+	// the only thing distinguishing the two chips besides a green/amber hue one staff member
+	// in twenty cannot rely on. A pictograph in here would pass every other test in this file.
+	for (const s of Object.values(STATES)) {
+		assert.match(s.label, /^[A-Z?]{2,3}$/, `"${s.label}" must be two or three ASCII capitals`);
+	}
 
 	// The driver gives the byte as text; a number is accepted because writing is by byte.
 	assert.equal(stateOf(0xda).word, 'in library');

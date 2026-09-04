@@ -85,8 +85,8 @@ export function fakeWindow({
 		Object.defineProperty(node, 'textContent', {
 			get() {
 				// Like the DOM, whose textContent is an element's own text plus its children's:
-				// a test can read "RFID \u2713 1302079605 \u21e4" out of the pill without knowing
-				// that the label and each tag are separate spans.
+				// a test can read "RFID \u2713 1302079605 IN" out of the pill without knowing that
+				// the label and each tag are separate spans.
 				return this.text + this.children.map((c) => c.textContent).join('');
 			},
 			set(v) {

@@ -312,6 +312,10 @@ test('a write that fails still transacts, and the pill keeps telling the truth',
 	assert.equal(d.boxes.returns.submits, 1, 'the check-in is not held hostage to a bit');
 	assert.equal(d.m0.tags[0].security, 'D7', 'shown as still on loan, which is what the tag says');
 	assert.ok(
+		d.elements[0].children.map((c) => c.textContent).includes(`${BOOK.content} OUT`),
+		`the chip says OUT, not the IN we wanted: ${d.elements[0].textContent}`,
+	);
+	assert.ok(
 		d.m0.log.some((l) => /security bit NOT written/.test(l)),
 		'and the failure is in the log',
 	);
@@ -323,10 +327,7 @@ test('what the plugin wrote is what the pill shows next time it paints', async (
 	await settled();
 
 	const chips = d.elements[0].children.map((c) => c.textContent);
-	assert.ok(
-		chips.some((c) => c.includes(BOOK.content) && c.includes('\u21e4')),
-		`in library after the write: ${chips}`,
-	);
+	assert.ok(chips.includes(`${BOOK.content} IN`), `in library after the write: ${chips}`);
 });
 
 // --- the ordering, the races, and the memory's expiry -------------------------------
