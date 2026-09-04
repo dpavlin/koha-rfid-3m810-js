@@ -37,7 +37,7 @@ retired by this.
    filling the box and leaving `Return` to a human.
 3. **One bundle, inlined.** This Koha (18.11-ffzg fork) does not serve files out
    of the plugin dir (`/plugin/…` → 404) and discovers plugins by filesystem
-   scan, so the Perl hook inlines a single esbuild IIFE (≈23 KB, 9 KB gzip).
+   scan, so the Perl hook inlines a single esbuild IIFE.
 
 ## Provenance
 
@@ -99,7 +99,7 @@ find — `src/` is the source.
 ## Using it
 
 ```sh
-make test             # 79 hardware-free JS tests (offline, replays a live capture)
+make test             # 85 hardware-free JS tests (offline, replays a live capture)
 make test-policy      # 29 gate tests, run on the server against this repo's RFID.pm
 make check            # bundle + test + test-policy
 make deploy           # backup on server → perl -c → install → restart plack
@@ -107,6 +107,13 @@ make log              # what the plugin decided, per page load
 make live-log         # the same lines, as they happen
 make rollback         # restore the newest backup
 ```
+
+Everything deploys to **ffzg on `koha-dev.rot13.org`** — the box `tools/deploy.sh` names, and
+the only installation this plugin has ever run on. `koha.ffzg.hr` is production: it has no RFID
+plugin installed and it is not a deploy target until a rollout is actually decided (PLAN §9 Q9
+is the question that decides it). Its logs are still the best evidence there is of how the staff
+client gets used, which is where the request counts in PLAN §6 came from — read-only, and
+aggregated to counts.
 
 Enrol a workstation: open a circulation page in Chrome, press
 <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd> (or append `?rfid=1` once), pick the

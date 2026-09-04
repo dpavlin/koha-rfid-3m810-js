@@ -305,10 +305,13 @@ Proposal — replace the dead F4 notice with the real thing:
       **[Set DA] [Set D7]** for maintenance.
 2. **Barcode source: the URL and the database, never the markup.** `moredetail.pl` reads
    `biblionumber` unconditionally and feeds it to `GetItemsInfo` (installed script, lines 65 and
-   90); `itemnumber` is optional and only sets `ONLY_ONE` when present (line 263). The access log
-   agrees: 7 of 7 requests carried `biblionumber`, 2 of those also `itemnumber`. So the hook
-   resolves the item from `CGI->new` — inside a hook that is the current request, measured on
-   plack rather than assumed, three requests three answers — plus `Koha::Items`: `->find` when
+   90); `itemnumber` is optional and only sets `ONLY_ONE` when present (line 263). Production
+   traffic says the same at a size worth trusting (two weeks on koha.ffzg.hr, read-only: 83
+   `moredetail.pl` requests, **none without `biblionumber`**, 79 of them carrying `itemnumber`
+   — staff already work in the single-item shape the panel can act on, and the other 4 are the
+   ones it refuses). So the hook resolves the item from `CGI->new` — inside a hook that is the
+   current request, measured on plack rather than assumed, three requests three answers — plus
+   `Koha::Items`: `->find` when
    the URL names an item, `->search({ biblionumber }, { rows => 2 })` when it does not, which
    asks "one or several?" without counting. Not `GetItemsInfo`, the function the page itself
    uses: it resolves every item, and ffzg has a biblio with 805 of them, so the plugin would be
@@ -544,3 +547,13 @@ at }`, with `barcode_before` present only when the tag was not blank. The hard p
    "it's broken" into a slow fix. What argues against both: the other tab is usually a person
    working, so retrying is a fight the librarian should win by closing a window, not by
    waiting. Unsettled because it is a question about behaviour at a desk, not about code.
+9. **Is `pages` the right list?** Two weeks of production traffic (koha.ffzg.hr, read-only counts
+   of the staff URIs this config names): `mainpage.pl` 4452, `returns.pl` 2691,
+   `circulation-home.pl` 2635, `circulation.pl` 1331, **`renew.pl` 1**, `moredetail.pl` 83. Two
+   things fall out. `renew.pl` is a page the plugin routes a transaction to — and it is the page
+   that checks an item in *and issues it straight back out* — that nobody opened in two weeks;
+   keeping it costs a line of config and buys a surface where a mis-set cursor does the most
+   damage. `mainpage.pl` is the busiest page in the set by three times, and the plugin ships its
+   whole bundle there to reach header quick-boxes on a page whose own body has no circulation
+   box: worth those bytes for the desk that lands there, or does the enrolment list grow a
+   per-page `hint` so the landing page stays clean? Neither answer changes code, only config.
