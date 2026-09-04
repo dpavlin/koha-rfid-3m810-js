@@ -303,11 +303,32 @@ Proposal — replace the dead F4 notice with the real thing:
     - swap the two "Press F4" dialogs for one panel: **[Program tag]** (also bound to
       <kbd>F4</kbd> and <kbd>Ctrl+Alt+P</kbd>, since F4 is browser-flaky), **[Read tag]**,
       **[Set DA] [Set D7]** for maintenance.
-2. **Barcode source**: the item's barcode as rendered on the page — read it from the
-   `<h3>Barcode …</h3>` heading, and additionally have Perl/JS add
-   `data-rfid-barcode` / `data-itemnumber` to that heading at runtime so the parser
-   never depends on markup details. Refuse to guess when multiple items are listed:
-   require the single-item `[RFID Tag]` view (which is exactly what staff use today).
+2. **Barcode source: the URL and the database, never the markup.** `moredetail.pl` reads
+   `biblionumber` unconditionally and feeds it to `GetItemsInfo` (installed script, lines 65 and
+   90); `itemnumber` is optional and only sets `ONLY_ONE` when present (line 263). The access log
+   agrees: 7 of 7 requests carried `biblionumber`, 2 of those also `itemnumber`. So the hook
+   resolves the item from `CGI->new` — inside a hook that is the current request, measured on
+   plack rather than assumed, three requests three answers — plus `Koha::Items`: `->find` when
+   the URL names an item, `->search({ biblionumber }, { rows => 2 })` when it does not, which
+   asks "one or several?" without counting. Not `GetItemsInfo`, the function the page itself
+   uses: it resolves every item, and ffzg has a biblio with 805 of them, so the plugin would be
+   slowing an already slow page in order to decide to refuse. The browser receives
+   `{ itemnumber, barcode }`.
+
+    Nothing here reads HTML. `<h3>Barcode …</h3>` stays what staff read — and it is worth knowing
+    that it is **upstream** markup, not part of the 2012 patch (`diff` against the installed
+    `moredetail.tt` shows that line as unchanged context), whereas the barcode in `<title>` _is_
+    local: a parser aimed at the title is the one thing an upgrade would have taken away.
+    `C4::Context->query` does not exist in this Koha, nor `C4::Items::GetItem`, nor
+    `GetItemnumbersForBiblio`; `Koha::Items` is both what works on 18.11 and what those C4
+    functions get rewritten into upstream.
+
+    **Ambiguity is refused, never guessed**: no `itemnumber` and more than one item means the
+    panel explains itself and links to the single-item `[RFID Tag]` view staff already use — the
+    same condition Koha marks with `ONLY_ONE`, so "the plugin refuses" and "this page is showing
+    all items" are one fact, not two opinions. An upgrade can take the page away from us; it
+    cannot make the plugin write a barcode that was not in `items`.
+
 3. **Write sequence** = existing driver call `program([{ sid, content: barcode }])` →
    `writeBlocks` (RFID501 encode) + `writeAfi(DA)` + read-back verification, 10 retries.
    `DA` because a newly tagged item goes on the shelf checked in.
@@ -318,11 +339,35 @@ Proposal — replace the dead F4 notice with the real thing:
       (so nobody wipes a live tag left on the pad by accident);
     - tag content unreadable/blank → treat as blank, allow write;
     - after write: re-read, compare, show ✓/✗ with the SIF, and beep only on failure;
-    - session write counter + ring buffer in `localStorage` (`rfid_writes`),
-      exportable as CSV from the panel. Server-side audit would need a
-      `plugins/run.pl` route, which in this fork requires the `plugins` permission
-      flag — too restrictive for catalogers, so audit stays client-side in v1 (open
-      question §9).
+    - session write counter + ring buffer (`m0.programs`), exportable as CSV from the panel.
+      That is a convenience, **not** an audit trail — see the TODO below.
+
+> **TODO, next step — one audit row in Koha per tag written, carrying the value it
+> replaced.** `m0.programs` lives in the browser of the person who made the change and dies
+> with a rebuilt workstation, which is the opposite of an audit. Wanted: one row per successful
+> programming carrying `{ itemnumber, barcode_before, barcode_after, tag_sid, staff_id, branch,
+at }`, with `barcode_before` present only when the tag was not blank. The hard part is
+> already done — `programTag` returns `from` (what the tag held, read back before the write)
+> and `to`, so the client has the pair without touching the reader twice. What is left is a
+> decision and a route:
+>
+> - **Where the row goes.** Koha's own `action_log` (via `C4::Log::actionlog`) is the place
+>   people already look, and its `action_extra` column will hold `old → new`; a plugin-owned
+>   table is honest and free of syspref surprises but invisible to anyone browsing the staff
+>   interface. Prefer `action_log`, and check on this fork that the relevant logging syspref is
+>   actually on before designing around it — an audit trail that is silently disabled by a
+>   preference is worse than none, because it is believed.
+> - **How it gets there.** Not `plugins/run.pl`: §6.4 rejected it and §9 Q3 is still open for
+>   the same reason — it needs the `plugins` permission, which catalogers should not have. A
+>   Koha plugin can register its own route (`routes()`), authenticate inside it with
+>   `C4::Auth::checkauth`, and accept a write only for the `itemnumber` the page was showing.
+> - **When it is written.** After a verified write, never before; and a failed audit write must
+>   never look like a failed tag write. The tag is the truth, the row is a receipt: keep the
+>   receipt in `m0.programs` for retry and say so in the panel.
+> - **What is not logged.** Reads. A write that changed nothing is still worth one row — it
+>   records that somebody checked that tag on that date — but an inventory of reads would bury
+>   the log in noise.
+
 5. **Batch mode** (later): queue of items (paste barcodes / from a shelf-list) →
    present tag N, write, present tag N+1 — the natural next feature once single-item
    programming is trusted.
@@ -420,9 +465,11 @@ Proposal — replace the dead F4 notice with the real thing:
   job is that the right barcode reached the right box and that the tag now says what the
   transaction it started means.
 - **M2 programming** — moredetail panel + guardrails + write log + placement photo.
-  _Started:_ the guard (four rules, `core/tagwrite.js`), the write log (`m0.writes`),
+  _Started:_ the guard (four rules, `core/tagwrite.js`), the write log (`m0.programs`),
   `programming` off by default, read-back verification ✓ — all exercised on a real
-  tag. Missing: the UI panel on `moredetail.pl`, and placement photo.
+  tag. Missing: the UI panel on `moredetail.pl`, and placement photo. The barcode comes from
+  the URL + `items`, not from the page's markup (§6.2), and the next step after the panel is
+  the audit row in Koha (§6, TODO).
 - **M3 polish** — Perl-side page/branch gating, config JSON, beep, `visibilitychange`,
   CSV export, browser-support + rollout docs, KPZ build for other installations,
   version tags + CHANGELOG.
@@ -463,8 +510,9 @@ Proposal — replace the dead F4 notice with the real thing:
    that is the affordance for arming it. Worth it, or should a dormant desk see nothing until
    `?rfid=1`? (`hint: false` hides it; nobody has asked, which is weak evidence that four
    characters in a corner are not a cost.)
-3. Programming audit: client-side ring buffer only (v1) — acceptable, or do we want
-   writes recorded in Koha (needs a `run.pl` route + a permission grant for catalogers)?
+3. Programming audit: settled as "yes, and it is the next step" — see the TODO in §6. What is
+   still open is the shape: `action_log` with `action_extra`, or a table of the plugin's own,
+   and how the route authenticates without handing catalogers the `plugins` permission.
 4. Is the 2012 `moredetail.tt` patch going to stay patched in-tree, or should the new
    plugin _replace_ it by hiding those notices from JS (it can, with a CSS/JS override)?
 5. `Ctrl+Alt+R` acceptable as the one memorable shortcut (and keep `F4` for programming)?

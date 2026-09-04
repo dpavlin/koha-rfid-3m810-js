@@ -13,7 +13,9 @@ use Modern::Perl;
 use base qw(Koha::Plugins::Base);
 
 use C4::Context;
+use CGI;
 use File::Slurp qw(read_file);
+use Koha::Items;
 use JSON::XS qw(decode_json encode_json);
 use utf8;
 
@@ -145,6 +147,55 @@ sub _on_rfid_page {
     return 0;
 }
 
+## What item is this page about, for tag programming. Standard calls, no parsing and no
+## HTML: C4::Context->query is the request CGI that checkauth stashed before the template
+## ran, and Koha::Items is the API a plugin is meant to use — and the one that outlives the
+## C4::Items functions, which upstream deletes roughly every other release (this fork has
+## neither GetItem nor GetItemnumbersForBiblio). One item is a fact; two or zero is refused
+## rather than guessed, which is the same judgement the page makes when it sets ONLY_ONE
+## (moredetail.pl:263).
+##
+## Cheap on purpose: `rows => 2` asks "one, or more than one?" without counting rows, because
+## ffzg has a biblio with 805 items and a plugin must not make a slow page slower just to
+## decide to refuse. Runs only where programming is switched on, and only on this page.
+sub _item_context {
+    # CGI->new inside the hook sees *this* request, not the one the worker rendered five
+    # seconds ago — measured on plack rather than assumed (three requests, three different
+    # biblionumbers, same worker, same process). C4::Context->query, which is the accessor
+    # newer Koha offers, does not exist in this fork: it dies "Can't locate object method".
+    my $cgi = CGI->new;
+    my $bib  = $cgi->param('biblionumber');
+    my $want = $cgi->param('itemnumber');
+    return { ok => 0, why => 'no biblionumber on this page' } unless ( $bib // '' ) =~ /^\d+$/;
+
+    my $item;
+    if ($want) {
+        $item = Koha::Items->find($want);
+        return { ok => 0, why => "item $want is not an item of biblio $bib", count => 0 }
+          if ( !$item || $item->biblionumber != $bib );
+    }
+    else {
+        my @rows = Koha::Items->search( { biblionumber => $bib }, { rows => 2 } )->as_list;
+        return { ok => 0, why => 'no items on this biblio', count => 0 } unless @rows;
+        return {
+            ok    => 0,
+            count => Koha::Items->search( { biblionumber => $bib } )->count,
+            why   => 'several items on this biblio — open the single-item view to tag one',
+        } if ( @rows > 1 );
+        $item = $rows[0];
+    }
+
+    return { ok => 0, why => 'this item has no barcode', itemnumber => $item->itemnumber }
+      unless $item->barcode;
+    return {
+        ok         => JSON::XS::true(),
+        itemnumber => $item->itemnumber,
+        barcode    => $item->barcode,
+        callnumber => $item->itemcallnumber,
+        onloan     => $item->onloan,
+    };
+}
+
 ## Which keys identify this user in userenv. This fork stores the login name under
 ## 'id' — circ/returns.pl and circ/circulation.pl both do
 ## C4::Auth::haspermission( C4::Context->userenv->{id}, ... ) — while newer Koha
@@ -250,10 +301,30 @@ sub intranet_js {
             qw(hint debug bookPrefix programming fill autoSubmit securityBit postedTtl
                 watch watchIntervalMs pauseWatchWhenHidden);
 
+        # The item this page is about, for the programming panel: only on the page that
+        # shows one, and only where writing is switched on at all. Its own eval, because a
+        # catalogue lookup failing must cost the panel and not the whole plugin.
+        my $item_js = '';
+        if ( $cfg->{programming} && $page =~ m{catalogue/moredetail\.pl$} ) {
+            my $item = eval { _item_context() };
+            warn "RFID: item context failed: $@" if $@;
+            if ( ref $item eq 'HASH' ) {
+                $item_js = sprintf( '<script>window.RFID_ITEM=%s;</script>', _js(encode_json($item)) );
+                warn sprintf(
+                    "RFID: item %s (barcode %s) for page=%s%s\n",
+                    $item->{itemnumber} // '-',
+                    $item->{ok} ? $item->{barcode} : '-',
+                    $page,
+                    $item->{ok} ? '' : ' — refused: ' . ( $item->{why} // 'unknown' ),
+                );
+            }
+        }
+
         my $html = sprintf(
             '<script>window.RFID_CONFIG=%s;window.RFID_CONTEXT=%s;</script>',
             _js( encode_json(\%client_config) ), _js($context)
         );
+        $html .= "\n" . $item_js if $item_js;
 
         $html .= "\n<script>" . _js($bundle) . "</script>";
 
