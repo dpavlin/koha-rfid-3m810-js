@@ -101,8 +101,22 @@ export function installPanel({ win, m0, cfg = {}, note = () => {} } = {}) {
 	};
 
 	const write = async () => {
+		if (!item) return;
+		// Every way the panel can be asked and cannot answer says so in the box. A keystroke
+		// that silently does nothing is how people conclude the reader is broken.
+		if (!item.ok) {
+			last = { error: `this page cannot program: ${item.why}` };
+			return render();
+		}
+		if (!connected()) {
+			last = { error: 'no reader connected — Ctrl+Alt+R' };
+			return render();
+		}
 		const tags = pad();
-		if (!item || !item.ok || !tags.length) return;
+		if (!tags.length) {
+			last = { error: 'no tag on the pad' };
+			return render();
+		}
 		const tag = tags[0];
 		if (tags.length > 1) {
 			last = { error: `${tags.length} tags on the pad — one at a time, please` };
@@ -145,6 +159,15 @@ export function installPanel({ win, m0, cfg = {}, note = () => {} } = {}) {
 		last = t && t.error ? { error: t.error } : { read: t };
 		render();
 	};
+
+	// One guarded path from "asked to write" to "wrote", for the button and the key alike:
+	// a failing read of a real reader arrives as a rejected promise, and an unhandled one
+	// leaves the panel showing yesterday's state.
+	const run = () =>
+		write().catch((e) => {
+			last = { error: `programming failed: ${(e && e.message) || e}` };
+			render();
+		});
 
 	const button = (label, onClick, enabled = true, id = '') => {
 		const b = d.createElement('button');
@@ -235,9 +258,17 @@ export function installPanel({ win, m0, cfg = {}, note = () => {} } = {}) {
 						: ready
 							? `Overwrite ${armed.from} \u2192 ${item.barcode}`
 							: `Program ${item.barcode}`,
-					write,
+					run,
 					one && !waiting,
 					'rfid-write',
+				),
+			);
+
+			el.appendChild(
+				text(
+					d,
+					'F4 (or Ctrl+Alt+P) is the same as the button, with the same rules',
+					'color:#666;margin:6px 0 0 0',
 				),
 			);
 
@@ -259,6 +290,28 @@ export function installPanel({ win, m0, cfg = {}, note = () => {} } = {}) {
 	render();
 	const off = m0.onpaint ? m0.onpaint(render) : null;
 
+	// F4 is the muscle memory the 2012 template patch left behind, and Ctrl+Alt+P is there
+	// because F4 belongs to some browsers and window managers. Both go through the same write()
+	// as the button, arm-and-re-present included: a shortcut that skipped the confirmation
+	// would unmake it. So this page takes two keystrokes and every other page in the plugin
+	// still takes none (§5), and only while this panel is on the page — destroy() gives them
+	// back. Nothing is taken from a field: a librarian typing in the search box at the top of
+	// the page keeps their F4.
+	const editable = (el) =>
+		!!el &&
+		(['INPUT', 'TEXTAREA', 'SELECT'].includes(String(el.tagName || '').toUpperCase()) || !!el.isContentEditable);
+
+	const onKey = (ev) => {
+		if (ev.defaultPrevented) return;
+		const isF4 = ev.key === 'F4';
+		const isP = ev.ctrlKey && ev.altKey && (ev.key === 'p' || ev.key === 'P' || ev.code === 'KeyP');
+		if (!isF4 && !isP) return;
+		if (editable(d.activeElement)) return;
+		if (ev.preventDefault) ev.preventDefault();
+		run();
+	};
+	win.addEventListener('keydown', onKey);
+
 	return {
 		el,
 		render,
@@ -270,6 +323,7 @@ export function installPanel({ win, m0, cfg = {}, note = () => {} } = {}) {
 		},
 		destroy: () => {
 			if (off) off();
+			if (win.removeEventListener) win.removeEventListener('keydown', onKey);
 			if (el.parentNode && el.parentNode.removeChild) el.parentNode.removeChild(el);
 		},
 	};

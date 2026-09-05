@@ -41,6 +41,7 @@ export function fakeWindow({
 		elements: [],
 	};
 	const timers = { intervals: [], cleared: [] };
+	const winHandlers = {};
 	const storage = {};
 	if (armed) storage.rfid_armed = '1';
 
@@ -184,7 +185,18 @@ export function fakeWindow({
 				},
 			},
 		},
-		addEventListener: (type) => calls.listeners.push(type),
+		// Handlers are kept, not just counted, so a keybinding can be tested by pressing the
+		// key: dispatch() spreads a default preventDefault first, so a test can pass its own spy
+		// and see whether the plugin took the keystroke or left it to the browser.
+		addEventListener: (type, fn) => (calls.listeners.push(type), ((winHandlers[type] ||= []).push(fn), undefined)),
+		removeEventListener(type, fn) {
+			const l = winHandlers[type] || [];
+			const i = l.indexOf(fn);
+			if (i >= 0) l.splice(i, 1);
+		},
+		dispatch(type, ev = {}) {
+			for (const fn of winHandlers[type] || []) fn({ preventDefault() {}, ...ev });
+		},
 		RFID_CONFIG: config,
 		RFID_CONTEXT: context,
 	};

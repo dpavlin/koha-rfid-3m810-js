@@ -120,6 +120,19 @@ Enrol a workstation: open a circulation page in Chrome, press
 reader in the Chrome dialog. From then on every page load reconnects by itself.
 Same shortcut, or a click on the pill, disconnects.
 
+### Keys
+
+| key                                         | where                                               | what                                                                         |
+| ------------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------- |
+| <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>R</kbd> | any enrolled page                                   | connect or disconnect the reader — the same thing as clicking the pill       |
+| <kbd>F4</kbd>                               | the item page, while the programming panel is on it | write the page's barcode to the tag: the button's action, the button's rules |
+| <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>P</kbd> | as F4                                               | for browsers and window managers that swallow F4                             |
+
+Nothing else, on any page. No keystroke is taken while the cursor sits in a field, and no
+page without the panel has a key the plugin listens for — the don't-bother rule (PLAN §5)
+trades exactly one page of quiet for the 2012 muscle memory, and gives the keys back when
+the panel goes away.
+
 ### What a librarian sees
 
 The corner element is a status pill, and it is the only feedback the plugin gives:
@@ -210,17 +223,17 @@ as hidden, so a workstation that keeps Koha behind a spreadsheet can opt out wit
 pill's tooltip says `watch paused (tab hidden)` when this is why nothing happens.
 After three read failures in a row it stops by itself rather than retrying forever.
 
-| config key             | default | effect                                                                       |
-| ---------------------- | ------- | ---------------------------------------------------------------------------- |
-| `fill`                 | `true`  | type the scanned barcode into the focused box at all                         |
-| `autoSubmit`           | `true`  | post the form; `false` fills the box and leaves <kbd>Return</kbd> to a human |
-| `securityBit`          | `true`  | write the tag to the state the transaction is creating (one byte)            |
-| `postedTtl`            | `45`    | seconds a tag stays "already posted" while it sits under the head            |
+| config key             | default | effect                                                                                             |
+| ---------------------- | ------- | -------------------------------------------------------------------------------------------------- |
+| `fill`                 | `true`  | type the scanned barcode into the focused box at all                                               |
+| `autoSubmit`           | `true`  | post the form; `false` fills the box and leaves <kbd>Return</kbd> to a human                       |
+| `securityBit`          | `true`  | write the tag to the state the transaction is creating (one byte)                                  |
+| `postedTtl`            | `45`    | seconds a tag stays "already posted" while it sits under the head                                  |
 | `bookPrefix`           | `"130"` | which barcodes are books: skips patron cards when choosing what to type, words the guard's refusal |
-| `watch`                | `true`  | poll the pad; `false` means one scan per page load                           |
-| `watchIntervalMs`      | `600`   | poll interval                                                                |
-| `programming`          | `false` | allow rewriting what a tag _holds_ — barcode and EPC, not just its bit       |
-| `pauseWatchWhenHidden` | `true`  | pause polling while the tab is not in front                                  |
+| `watch`                | `true`  | poll the pad; `false` means one scan per page load                                                 |
+| `watchIntervalMs`      | `600`   | poll interval                                                                                      |
+| `programming`          | `false` | allow rewriting what a tag _holds_ — barcode and EPC, not just its bit                             |
+| `pauseWatchWhenHidden` | `true`  | pause polling while the tab is not in front                                                        |
 
 `securityBit` and `programming` are different capabilities and are switched separately:
 one sets a byte that says where the book is supposed to be, the other overwrites what the

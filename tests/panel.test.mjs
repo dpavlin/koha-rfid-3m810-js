@@ -79,8 +79,8 @@ function fakeM0({ tags = [], gate = 'ready', programming = true } = {}) {
 }
 
 /** A moredetail page: window with the item the server resolved, plus the dead F4 notices. */
-function page({ item = ITEM, notices = 2 } = {}) {
-	const { win, elements } = fakeWindow({ pathname: MOREDETAIL });
+function page({ item = ITEM, notices = 2, focus = null } = {}) {
+	const { win, elements } = fakeWindow({ pathname: MOREDETAIL, focus });
 	if (item) win.RFID_ITEM = item;
 	for (let i = 0; i < notices; i++) {
 		const n = win.document.createElement('div');
@@ -104,6 +104,12 @@ const panel = ({ win, m0, cfg = { programming: true } }) => {
 };
 
 const click = (b) => b.dispatch('click', {});
+/** Press a key on the window; the returned function says whether the plugin took the keystroke. */
+const press = (win, key, mods = {}) => {
+	let took = false;
+	win.dispatch('keydown', { key, ...mods, preventDefault: () => (took = true) });
+	return () => took;
+};
 const settled = () => new Promise((r) => setImmediate(r));
 
 test('the panel appears on moredetail.pl and nowhere else', () => {
@@ -271,6 +277,96 @@ test('the dead "Press F4" notices go away when something real takes their place'
 		['none', 'none'],
 		'hidden, because F4 does nothing in this build',
 	);
+});
+
+test('F4 is the button: a blank tag is programmed by the key', async () => {
+	const { win } = page();
+	const m0 = fakeM0({ tags: [tag('')] });
+	const p = panel({ win, m0 });
+
+	const took = press(win, 'F4');
+	await settled();
+
+	assert.deepEqual(
+		m0.called.map((c) => c.content),
+		[BARCODE],
+	);
+	assert.ok(took(), 'the plugin owned the keystroke, so the browser does not do its F4 thing');
+	assert.match(p.text(), /wrote 1305271134 — read back and verified/);
+});
+
+test('F4 cannot skip the confirmation', async () => {
+	const { win } = page();
+	const m0 = fakeM0({ tags: [tag('1302079605')] });
+	const p = panel({ win, m0 });
+
+	press(win, 'F4');
+	await settled();
+	assert.deepEqual(m0.called, [], 'the key arms, it does not write');
+	assert.match(p.text(), /lift the tag off the pad and put it back/);
+
+	// Twice more, because a key repeat is not a confirmation.
+	press(win, 'F4');
+	press(win, 'F4');
+	await settled();
+	assert.deepEqual(m0.called, []);
+
+	m0.pad([]);
+	m0.pad([tag('1302079605')]);
+	press(win, 'F4');
+	await settled();
+	assert.deepEqual(
+		m0.called.map((c) => c.opts.confirm),
+		['1302079605'],
+		'the key earns it the same way',
+	);
+});
+
+test('Ctrl+Alt+P is the same action, for the browsers that eat F4', async () => {
+	const { win } = page();
+	const m0 = fakeM0({ tags: [tag('')] });
+	panel({ win, m0 });
+
+	press(win, 'p', { ctrlKey: true, altKey: true });
+	await settled();
+	assert.deepEqual(
+		m0.called.map((c) => c.content),
+		[BARCODE],
+	);
+});
+
+test('the key is left to the browser while somebody is typing', async () => {
+	const { win } = page({ focus: { tagName: 'INPUT' } });
+	const m0 = fakeM0({ tags: [tag('')] });
+	const p = panel({ win, m0 });
+
+	const took = press(win, 'F4');
+	await settled();
+	assert.deepEqual(m0.called, [], 'no write from a field');
+	assert.equal(took(), false, 'and no preventDefault: the keystroke is not ours here');
+	assert.match(p.text(), /1305271134/, 'the panel just sits there, unchanged');
+});
+
+test('a key pressed when nothing can be written says why', async () => {
+	const { win } = page();
+	const m0 = fakeM0({ tags: [] });
+	const p = panel({ win, m0 });
+
+	press(win, 'F4');
+	await settled();
+	assert.match(p.text(), /no tag on the pad/, 'silent keys are how a working reader gets reported broken');
+});
+
+test('destroy gives the keystrokes back', async () => {
+	const { win } = page();
+	const m0 = fakeM0({ tags: [tag('')] });
+	const p = panel({ win, m0 });
+	p.destroy();
+
+	const took = press(win, 'F4');
+	await settled();
+	assert.deepEqual(m0.called, [], 'no panel, no claim on F4');
+	assert.equal(took(), false);
 });
 
 test('a panel that cannot render says so in its own box instead of taking the page', () => {

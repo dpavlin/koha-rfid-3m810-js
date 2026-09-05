@@ -300,9 +300,10 @@ Proposal — replace the dead F4 notice with the real thing:
 
 1. **Detect** `catalogue/moredetail.pl` + a granted/armed session; then
     - keep the placement photo (it is genuinely useful),
-    - swap the two "Press F4" dialogs for one panel: **[Program tag]** (also bound to
-      <kbd>F4</kbd> and <kbd>Ctrl+Alt+P</kbd>, since F4 is browser-flaky), **[Read tag]**,
-      **[Set DA] [Set D7]** for maintenance.
+    - swap the two "Press F4" dialogs for one panel: **[Program tag]** (bound to <kbd>F4</kbd>,
+      and <kbd>Ctrl+Alt+P</kbd>, since F4 is browser-flaky) and **[Read tag]** are built and in
+      use; **[Set DA] [Set D7]** for maintenance are not, so the panel can set the security bit
+      only as part of programming a barcode (`writeAfi(DA)`), not on its own.
 2. **Barcode source: the URL and the database, never the markup.** `moredetail.pl` reads
    `biblionumber` unconditionally and feeds it to `GetItemsInfo` (installed script, lines 65 and
    90); `itemnumber` is optional and only sets `ONLY_ONE` when present (line 263). Production
@@ -473,6 +474,11 @@ at }`, with `barcode_before` present only when the tag was not blank. The hard p
   job is that the right barcode reached the right box and that the tag now says what the
   transaction it started means.
 - **M2 programming** — moredetail panel + guardrails + write log + placement photo.
+  _Built and driven on real tags, 2026-09-05:_ the panel (`core/panel.js`) — one read, one
+  barcode it may write, no field to type another, the arm-then-lift-and-replace confirm, the
+  <kbd>F4</kbd> / <kbd>Ctrl+Alt+P</kbd> bindings, and the dead notices hidden while it is
+  live. Missing: [Set IN] / [Set OUT] for the security bit, [Blank], the placement photo, CSV
+  export, and the audit row above.
   _Started:_ the guard (four rules in `core/tagwrite.js`; rule 2 was tightened from "tags that
   are not books" to "any change", 2026-09-05), the write log (`m0.programs`),
   `programming` off by default, read-back verification ✓ — all exercised on a real
@@ -524,7 +530,9 @@ at }`, with `barcode_before` present only when the tag was not blank. The hard p
    and how the route authenticates without handing catalogers the `plugins` permission.
 4. Is the 2012 `moredetail.tt` patch going to stay patched in-tree, or should the new
    plugin _replace_ it by hiding those notices from JS (it can, with a CSS/JS override)?
-5. `Ctrl+Alt+R` acceptable as the one memorable shortcut (and keep `F4` for programming)?
+5. `Ctrl+Alt+R` and `F4` are both bound now (connect, and program on the item page), so what
+   is left of this question is memorability: two shortcuts, and `Ctrl+Alt+P` advertised
+   nowhere but the panel that offers it.
 6. A transaction Koha refused can leave the tag in the state that the refused transaction
    would have created (§3.1), and only another scan of that same book corrects it. Enough, or
    does "what should this tag say" need a record a second desk could ask — which means a
@@ -557,7 +565,7 @@ at }`, with `barcode_before` present only when the tag was not blank. The hard p
    of the staff URIs this config names): `mainpage.pl` 4452, `returns.pl` 2691,
    `circulation-home.pl` 2635, `circulation.pl` 1331, **`renew.pl` 1**, `moredetail.pl` 83. Two
    things fall out. `renew.pl` is a page the plugin routes a transaction to — and it is the page
-   that checks an item in *and issues it straight back out* — that nobody opened in two weeks;
+   that checks an item in _and issues it straight back out_ — that nobody opened in two weeks;
    keeping it costs a line of config and buys a surface where a mis-set cursor does the most
    damage. `mainpage.pl` is the busiest page in the set by three times, and the plugin ships its
    whole bundle there to reach header quick-boxes on a page whose own body has no circulation
