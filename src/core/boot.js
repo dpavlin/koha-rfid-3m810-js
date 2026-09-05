@@ -49,6 +49,7 @@
 
 import { boot as bootReader, watch } from '../main.js';
 import { programTag, readTag } from './tagwrite.js';
+import { installPanel } from './panel.js';
 import { intentOf, stateOf, STATES } from './intent.js';
 
 const VERSION = '0.1.0';
@@ -213,7 +214,21 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 			}
 			hint.title = `${title}${m0.watching ? ' (watching)' : ''} — click, or Ctrl+Alt+R`;
 			hint.style.cssText = `${PILL_BASE};${css}${flashing ? ';background:#fff3b0;opacity:1' : ''}`;
+			// Anything else that shows reader state paints from here, so there is one clock and
+			// one source of truth: the programming panel, and the next thing that wants to know
+			// what is on the pad. Listeners are told after the pill is consistent, and a broken
+			// listener cannot take the pill down with it.
+			for (const fn of painted) safe('onpaint', fn);
 		});
+
+	const painted = [];
+
+	// Panel-ish things subscribe here rather than polling: the watch loop already knows when
+	// the pad changed, and a second timer reading m0.tags would only disagree with it.
+	m0.onpaint = (fn) => {
+		painted.push(fn);
+		return () => painted.splice(painted.indexOf(fn), 1);
+	};
 
 	// Brief highlight when the pad changes: a librarian who is looking at the
 	// screen, not at the reader, should still notice that something changed.
@@ -676,6 +691,16 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 			hint = el;
 			paint();
 			(d.getElementById('footer') || d.body || d.documentElement).appendChild(el);
+		});
+
+	// --- programming panel: catalogue/moredetail.pl, and only when the installation has
+	// switched writing on. It renders with the reader disconnected too, because "reader not
+	// connected" is a useful thing for that page to say, and a panel that only appears once
+	// everything already works teaches nobody anything.
+	if (cfg.programming === true)
+		safe('panel', () => {
+			if (!/catalogue\/moredetail\.pl$/.test((win.location && win.location.pathname) || '')) return null;
+			return installPanel({ win, m0, cfg, note });
 		});
 
 	// --- gate 3: armed already? reconnect silently, no gesture needed --------

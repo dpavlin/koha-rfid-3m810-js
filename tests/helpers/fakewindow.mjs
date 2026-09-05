@@ -59,6 +59,8 @@ export function fakeWindow({
 			title: '',
 			id: '',
 			text: '',
+			className: '',
+			parentNode: null,
 			setAttribute(k, v) {
 				this.attrs[k] = v;
 			},
@@ -66,7 +68,14 @@ export function fakeWindow({
 				(this.handlers[type] ||= []).push(fn);
 			},
 			appendChild(n) {
+				n.parentNode = this;
 				this.children.push(n);
+				return n;
+			},
+			removeChild(n) {
+				const i = this.children.indexOf(n);
+				if (i >= 0) this.children.splice(i, 1);
+				n.parentNode = null;
 				return n;
 			},
 			dispatch(type, ev = {}) {
@@ -134,11 +143,31 @@ export function fakeWindow({
 		document: {
 			getElementById: (id) => calls.elements.find((n) => n.id === id) || null,
 			querySelector: () => null,
-			querySelectorAll: () => [],
-			createElement: (tag) => (
-				calls.createElement++,
-				calls.elements.push(Object.assign(el(), { tag })) && calls.elements.at(-1)
-			),
+			// One selector shape, good enough for the panel and honest about being a fake:
+			// 'div.dialog.message' matches a created div whose className contains both classes.
+			// Anything fancier returns nothing, which is the safe direction: the caller then
+			// leaves the page alone rather than pretending it changed something.
+			querySelectorAll: (sel = '') => {
+				const [tag, ...classes] = String(sel)
+					.split(/(?=[.#])|\s+/)
+					.filter(Boolean);
+				return calls.elements.filter(
+					(n) =>
+						(!tag || n.tag === tag) &&
+						classes.every((c) => ` ${n.className} `.includes(` ${c.replace(/[.#]/g, '')} `)),
+				);
+			},
+			// A browser throws InvalidCharacterError for a name like "margin:2px 0", and the
+			// first version of the panel made exactly that element. A fake that accepts anything
+			// turns that into a panel that works in tests and throws on a librarian's screen.
+			createElement: (tag) => {
+				if (typeof tag !== 'string' || !/^[a-zA-Z][\w-]*$/.test(tag))
+					throw new Error(`InvalidCharacterError: "${tag}" is not a valid element name`);
+				return (
+					calls.createElement++,
+					calls.elements.push(Object.assign(el(), { tag })) && calls.elements.at(-1)
+				);
+			},
 			addEventListener: (type, fn) => (calls.docListeners[type] ||= []).push(fn),
 			dispatch(type, ev = {}) {
 				for (const fn of calls.docListeners[type] || []) fn({ preventDefault() {}, ...ev });
