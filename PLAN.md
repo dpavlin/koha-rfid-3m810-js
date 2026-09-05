@@ -302,8 +302,9 @@ Proposal — replace the dead F4 notice with the real thing:
     - keep the placement photo (it is genuinely useful),
     - swap the two "Press F4" dialogs for one panel: **[Program tag]** (bound to <kbd>F4</kbd>,
       and <kbd>Ctrl+Alt+P</kbd>, since F4 is browser-flaky) and **[Read tag]** are built and in
-      use; **[Set DA] [Set D7]** for maintenance are not, so the panel can set the security bit
-      only as part of programming a barcode (`writeAfi(DA)`), not on its own.
+      use; **[Set DA] [Set D7]** for maintenance are not — which costs less than it sounds,
+      because programming is not allowed to set the security bit freely either (§6.3: it may only
+      relax a tag to checked-in, never arm one).
 2. **Barcode source: the URL and the database, never the markup.** `moredetail.pl` reads
    `biblionumber` unconditionally and feeds it to `GetItemsInfo` (installed script, lines 65 and
    90); `itemnumber` is optional and only sets `ONLY_ONE` when present (line 263). Production
@@ -334,8 +335,16 @@ Proposal — replace the dead F4 notice with the real thing:
     cannot make the plugin write a barcode that was not in `items`.
 
 3. **Write sequence** = existing driver call `program([{ sid, content: barcode }])` →
-   `writeBlocks` (RFID501 encode) + `writeAfi(DA)` + read-back verification, 10 retries.
-   `DA` because a newly tagged item goes on the shelf checked in.
+   `writeBlocks` (RFID501 encode) + read-back verification, 10 retries. AFI is written by a
+   narrower rule than the Go server's "set it from the content": `program()` reads the AFI and
+   **leaves it alone unless the tag says checked-out**, in which case it relaxes it to `DA` — the
+   state a newly tagged item is in when it goes on the shelf. Nothing on the programming path
+   ever writes `D7`. Checked-out is what the circulation flow produces, at the moment it issues
+   the book, and that flow is the thing keeping chip and catalogue in step; a programming screen
+   that writes it is how they drift, and a chip that disagrees with Koha costs more than the one
+   extra scan that fixes it. A blank leaves the AFI untouched — the old code cleared it to
+   checked-out, which is an argument about gate alarms, not about this screen, and it stays
+   unmade until [Blank] exists.
 4. **Guardrails** (this is where tag programming bites people, so be strict):
     - barcode > 16 bytes → refuse, show the byte count (RFID501 field limit);
     - tag already holds a _different_ barcode → refuse, and unlock only by repeating the
@@ -460,14 +469,20 @@ at }`, with `barcode_before` present only when the tag was not blank. The hard p
     `#findborrower` → `patron` on every page. Each page puts the cursor in its own body box on
     load, which is why the plugin works before anyone clicks anything.
 
-    **Not verified, and now written as such:** that a keystroke moves the cursor into a header
-    box. `#ret_barcode`/`#search-form` carry `accesskey` in the markup (`tests/fixtures/` shows
-    it too) but measure `getClientRects().length === 0` until the header panel is opened, and
-    CDP `Input.dispatchKeyEvent` does not activate an accesskey — three runs, three answers,
-    which is the sound a probe makes when it is measuring itself. The header routing in
-    `intent.js` is therefore unit-tested (`intent.test.mjs`, against the captured markup) and
-    unproven against a keystroke. What would settle it is one hand on the real keyboard at the
-    real desk, which is M2 anyway.
+    **Was not verifiable from CDP; settled by a hand at the desk, 2026-09-05.** The claim was
+    that a keystroke moves the cursor where the plugin routes. `#ret_barcode`/`#search-form`
+    carry `accesskey` in the markup (`tests/fixtures/` shows it too) but measure
+    `getClientRects().length === 0` until the header panel is opened, and CDP
+    `Input.dispatchKeyEvent` does not activate an accesskey — three runs, three answers, which is
+    the sound a probe makes when it is measuring itself. Pressed for real on `returns.pl`,
+    <kbd>Alt</kbd>+<kbd>R</kbd> stays on the page and puts the cursor in `#barcode`, whose form
+    posts to `circ/returns.pl` — `checkin:inLibrary`, the box the plugin acts on — so a page
+    reached by keyboard is armed with no click and no typing. What the key does **not** open is
+    the header quick-box: `#ret_barcode` is not in that DOM, and `#findborrower` is the only
+    header field on the page (measured, unfocused). The header routing in `intent.js` therefore
+    stays unit-tested (`intent.test.mjs`, against the captured markup) and unproven in the field,
+    and returns.pl's accesskey points at the body box anyway — the better outcome, since that is
+    the box the transaction belongs to.
 
 - **M1a / M1b as originally written — built, deployed, deleted.** The AFI was deferred
   behind Koha's confirmation: `core/security.js` kept the owed writes in `sessionStorage`,

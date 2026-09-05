@@ -233,38 +233,66 @@ test('program() rejects content longer than RFID501 holds', async () => {
 
 /** program()/secure() policy without the wire: record the primitives */
 class Recording extends Reader3M {
-	constructor() {
+	constructor({ afi = AFI_SECURE } = {}) {
 		super(new FakeTransport([]), { log: () => {} });
 		this.calls = [];
+		this.afi = afi;
 	}
 	async writeBlocks(sid, data) {
 		this.calls.push(['blocks', sid, hex(data)]);
 	}
 	async writeAfi(sid, afi) {
 		this.calls.push(['afi', sid, afi]);
+		this.afi = afi;
 	}
 	async readAfi() {
-		return AFI_SECURE;
+		return this.afi;
 	}
 }
 
-test('program() picks AFI by content and blanks clear it', async () => {
+test('programming a tag that already says checked-in writes blocks and touches nothing else', async () => {
 	const p = new Recording();
-	await p.program([
-		{ sid: 'e004010031269117', content: '1302099999' }, // item barcode -> secure
-		{ sid: 'E00401001F77FB98', content: '200000000042' }, // patron card -> unsecure
-		{ sid: 'E00401003126A0C8', content: 'blank' },
-	]);
+	const res = await p.program([{ sid: 'e004010031269117', content: '1302099999' }]);
+
+	assert.equal(res.ok, 1);
 	assert.deepEqual(
 		p.calls.map((c) => c[0]),
-		['blocks', 'afi', 'blocks', 'afi', 'blocks', 'afi'],
+		['blocks'],
+		'no AFI write: the chip already said what a shelf book says',
 	);
-	assert.equal(p.calls[1][2], AFI_SECURE);
-	assert.equal(p.calls[3][2], AFI_UNSECURE);
-	assert.equal(p.calls[5][2], AFI_UNSECURE, 'a blank tag must never be secured');
-	assert.equal(p.calls[4][2], hex(blankTag()));
 	assert.equal(p.calls[0][1], 'E004010031269117', 'SID uppercased like the Go server');
 	assert.equal(p.calls[0][2], hex(encodeContent('1302099999')));
+});
+
+test('programming relaxes a checked-out tag to checked-in, and only that way', async () => {
+	const p = new Recording({ afi: AFI_UNSECURE });
+	await p.program([
+		{ sid: 'e004010031269117', content: '1302099999' }, // item barcode
+		{ sid: 'E00401001F77FB98', content: '200000000042' }, // patron card, now already relaxed
+	]);
+
+	assert.deepEqual(
+		p.calls.map((c) => c[0]),
+		['blocks', 'afi', 'blocks'],
+		'relaxed once, then left alone',
+	);
+	assert.equal(p.calls[1][2], AFI_SECURE, 'checked-in is the only state programming may write');
+});
+
+test('nothing on the programming path arms a tag, blanks included', async () => {
+	const p = new Recording({ afi: AFI_SECURE });
+	await p.program([
+		{ sid: 'E00401003126A0C8', content: 'blank' },
+		{ sid: 'E00401003126A0C9', content: '3mblank' },
+	]);
+
+	assert.deepEqual(
+		p.calls.map((c) => c[0]),
+		['blocks', 'blocks'],
+		'a blank writes blocks and no AFI',
+	);
+	assert.equal(p.calls[0][2], hex(blankTag()));
+	assert.equal(p.afi, AFI_SECURE, 'still checked-in — 0xd7 comes from circulation, never from here');
 });
 
 test('program() keeps going after one tag fails and reports it', async () => {
@@ -282,7 +310,7 @@ test('program() keeps going after one tag fails and reports it', async () => {
 	assert.equal(res.ok, 0);
 	assert.deepEqual(res.errors, ['tag not found']);
 	assert.ok(
-		p.calls.some((c) => c[0] === 'afi'),
+		p.calls.some((c) => c[0] === 'blocks' && c[1] === 'E004010031269117'),
 		'second tag still programmed',
 	);
 });

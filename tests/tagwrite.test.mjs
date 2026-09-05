@@ -30,6 +30,9 @@ function fakeTag({ content = '', afi = 0xda, fail = false } = {}) {
 		afi,
 		fail,
 		writes: [],
+		// Every AFI value this tag held at the moment programming changed it. Tests assert on
+		// this because "programming does not arm tags" is a claim about writes, not about states.
+		afiWrites: [],
 	};
 	const reader = {
 		state,
@@ -39,10 +42,11 @@ function fakeTag({ content = '', afi = 0xda, fail = false } = {}) {
 				if (state.fail) continue;
 				if (op.content.toLowerCase() === 'blank') {
 					state.blocks = new Uint8Array(32);
-					state.afi = 0xd7;
+					// Blanks leave the AFI alone, exactly as the driver does.
 				} else {
 					state.blocks = encode501({ content: op.content });
-					state.afi = op.content.startsWith('130') ? 0xda : 0xd7;
+					// The driver's policy, mirrored: relax to checked-in if it must, never arm.
+					if (state.afi !== 0xda) (state.afiWrites.push(state.afi), (state.afi = 0xda));
 				}
 			}
 			return state.fail ? { ok: 0, errors: ['simulated block write failure'] } : { ok: 1, errors: [] };
@@ -150,9 +154,28 @@ test('writing a book barcode to a blank tag verifies against the tag itself', as
 	assert.equal(entry.error, null);
 	assert.equal(entry.verified, true, 'read back from the tag, not assumed');
 	assert.equal(entry.content, '1309999998');
-	assert.equal(entry.afi, 'DA', 'a book goes down secured');
+	assert.equal(entry.afi, 'DA', 'a book ends up saying checked-in, which is what a shelf book says');
+	assert.deepEqual(reader.state.afiWrites, [], 'and it got there without an AFI write: the tag already said so');
 	assert.equal(entry.from, '');
 	assert.match(entry.blocks, /^04110001 31333039/, 'block 0 says 1 of 1, Book; block 1 is "1309"');
+});
+
+test('programming a tag that was checked out leaves it checked in, and that is the only way it moves', async () => {
+	// The case the policy exists for: a tag left at 0xd7 by a bad transaction, or by whatever
+	// wrote it last. Programming puts a book on the shelf, so the tag must not stay armed —
+	// but programming may not decide a book is on loan either, which is circulation's call.
+	const reader = fakeTag({ afi: 0xd7 });
+	const entry = await programTag({
+		reader,
+		tags: [{ sid: NEW, content: '' }],
+		sid: NEW,
+		content: '1309999997',
+	});
+
+	assert.equal(entry.error, null);
+	assert.equal(entry.verified, true);
+	assert.deepEqual(reader.state.afiWrites, [0xd7], 'one move, from checked-out to checked-in');
+	assert.equal(entry.afi, 'DA');
 });
 
 test('blanking is programming with the empty pattern, and reads back empty', async () => {
@@ -167,7 +190,8 @@ test('blanking is programming with the empty pattern, and reads back empty', asy
 
 	assert.equal(entry.verified, true);
 	assert.equal(entry.content, '');
-	assert.equal(entry.afi, 'D7');
+	assert.equal(entry.afi, 'DA', 'blanking writes blocks; arming a tag is not part of erasing one');
+	assert.deepEqual(reader.state.afiWrites, []);
 	assert.equal(entry.empty, true);
 	assert.deepEqual(
 		reader.state.writes.map((w) => w.content),

@@ -279,9 +279,17 @@ downstream complains.
    barcode is a circulation bug that surfaces months later.
 4. 1..16 printable ASCII (the RFID501 field), or `blank` / `3mblank`.
 
+Programming also never _arms_ a tag. It writes the blocks, reads the AFI, and leaves it
+alone unless the tag says `on loan`, in which case it relaxes it to `in library` — the state
+a book is in when it goes on the shelf. `on loan` is produced by the circulation flow, at
+the moment the book is issued, and that flow is what keeps chip and catalogue agreeing; a
+cataloguing screen writing it is how they drift. Measured on the wire, programming a tag
+that already said `in library`: one block write, two AFI reads, **no AFI write at all**. A
+blank leaves the AFI untouched too.
+
 Nothing trusts the writer's own readback either: after `program()` the plugin reads
 the blocks and AFI again and reports what is actually on the tag, which is how the
-inherited 12-byte blank payload got caught — `m0.writes` keeps every attempt with
+inherited 12-byte blank payload got caught — `m0.programs` keeps every attempt with
 `from`, `to`, `afi`, `verified` and the refusal reason.
 
 ```js

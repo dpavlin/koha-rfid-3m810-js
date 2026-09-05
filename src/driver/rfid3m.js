@@ -355,7 +355,22 @@ export class Reader3M {
 		return { tags };
 	}
 
-	/** list = [{sid, content, tag?}] ; content "blank"/"3mblank" writes blanks */
+	/**
+	 * list = [{sid, content, tag?}] ; content "blank"/"3mblank" writes blanks.
+	 *
+	 * AFI policy, which is deliberately narrower than "set the AFI": programming writes the
+	 * blocks and **never creates a checked-out tag**. A tag that already says "in library" is
+	 * not touched at all; a tag found checked out is relaxed to checked-in, because programming
+	 * is how a book gets onto a shelf and a shelf book that alarms on the way out gets debugged
+	 * as a broken gate. Nothing here writes 0xd7. Checked-out is what the circulation flow
+	 * produces at the moment it issues the book, and that flow is the thing keeping chip and
+	 * catalogue in step; writing it from a cataloguing screen is how they drift.
+	 *
+	 * A blank leaves the AFI exactly as it was — no item, so no circulation state to assert.
+	 * (The old code cleared it to checked-out. That is a fail-safe for theft and a false alarm
+	 * for staff, which is an argument about gates, not about this screen, and it stays unmade
+	 * until [Blank] exists.)
+	 */
 	async program(list) {
 		const errors = [];
 		let ok = 1;
@@ -368,24 +383,28 @@ export class Reader3M {
 				continue;
 			}
 			try {
-				let afi;
-				if (content.toLowerCase() === 'blank') {
+				const lower = content.toLowerCase();
+				if (lower === 'blank') {
 					await this.writeBlocks(sid, blankTag());
-					afi = AFI_UNSECURE;
-				} else if (content.toLowerCase() === '3mblank') {
+				} else if (lower === '3mblank') {
 					await this.writeBlocks(sid, blank3M());
-					afi = AFI_UNSECURE;
 				} else {
 					await this.writeBlocks(sid, op.tag ? encode501(op.tag) : encodeContent(content));
-					afi = content.startsWith('130') ? AFI_SECURE : AFI_UNSECURE;
+					await this.ensureInLibrary(sid);
 				}
-				await this.writeAfi(sid, afi);
 			} catch (e) {
 				ok = 0;
 				errors.push(String(e.message || e));
 			}
 		}
 		return { ok, errors };
+	}
+
+	/** Checked-in if it is not already, and never the other way round. Explained at program(). */
+	async ensureInLibrary(sid) {
+		if ((await this.readAfi(sid)) === AFI_SECURE) return false;
+		await this.writeAfi(sid, AFI_SECURE);
+		return true;
 	}
 
 	/** list = [{sid, afi}] ; afi is a 2-char hex string or a byte */
