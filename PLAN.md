@@ -357,8 +357,11 @@ Proposal — replace the dead F4 notice with the real thing:
       pad can tell that anybody looked at the tag;
     - tag content unreadable/blank → treat as blank, allow write;
     - after write: re-read, compare, show ✓/✗ with the SIF, and beep only on failure;
-    - session write counter + ring buffer (`m0.programs`), exportable as CSV from the panel.
-      That is a convenience, **not** an audit trail — see the deferred item below.
+    - session write counter + ring buffer (`m0.programs`), dumped as CSV by
+      `tools/live/write-log.mjs` — not a panel button, because the only consumer of that file is
+      a test run, and a librarian-facing button that produces a file nobody at a desk opens is a
+      permanent bit of furniture around a testing need. A convenience, **not** an audit trail —
+      see the deferred item below.
 
 > **Deferred, not designed away — one audit row in Koha per tag written, carrying the value
 > it replaced.** What blocks it is not a decision about the row but what 19.11 lets a plugin do
@@ -411,8 +414,11 @@ verified }`, so the client holds the pair without touching the reader twice, and
 > UI since (§9 Q3).
 >
 > **Meanwhile the record is `m0.programs`** — the browser of the person who made the change,
-> deleted by a rebuilt workstation, which is the opposite of an audit and what the panel says.
-> It is also the argument for CSV export moving up the list rather than down it.
+> deleted by a rebuilt workstation or one navigation, which is the opposite of an audit and what
+> the panel says. `tools/live/write-log.mjs` dumps it as CSV for a test run, and deliberately
+> never logs in or reloads to make that dump look better: a tool that fabricates the conditions
+> of its own success is worse than no tool. So the honest size of the need is "one script for
+> testers", and it is built; the size it cannot reach is the audit.
 
 5. **Batch mode** (later): queue of items (paste barcodes / from a shelf-list) →
    present tag N, write, present tag N+1 — the natural next feature once single-item
@@ -520,7 +526,8 @@ verified }`, so the client holds the pair without touching the reader twice, and
   _Built and driven on real tags, 2026-09-05:_ the panel (`core/panel.js`) — one read, one
   barcode it may write, no field to type another, the arm-then-lift-and-replace confirm, the
   <kbd>F4</kbd> / <kbd>Ctrl+Alt+P</kbd> bindings, and the dead notices hidden while it is
-  live. Missing: [Blank], the placement photo, and CSV export. [Set IN] /
+  live; the write log exports via `tools/live/write-log.mjs`. Missing: [Blank] and the placement
+  photo. [Set IN] /
   [Set OUT] went away as a requirement (§6.3: programming may only relax a tag to checked-in,
   never arm one), and the audit row is blocked on the Koha version rather than on us (§6).
   _Started:_ the guard (four rules in `core/tagwrite.js`; rule 2 was tightened from "tags that
@@ -530,10 +537,10 @@ verified }`, so the client holds the pair without touching the reader twice, and
   the URL + `items`, not from the page's markup (§6.2). The audit row that was going to be the
   next step cannot be built on 19.11 without spending either the permission model, HTTP's verb,
   or the install's tidiness (§6), so it waits for an upgrade — which leaves `m0.programs`, a
-  browser-side buffer, as the only record there is, and makes CSV export the item it should
-  have been all along.
-- **M3 polish** — Perl-side page/branch gating, config JSON, beep, `visibilitychange`,
-  CSV export, browser-support + rollout docs, KPZ build for other installations,
+  browser-side buffer, as the only record there is. `tools/live/write-log.mjs` dumps it, which is
+  the honest size of that need: testers read it, desks do not.
+- **M3 polish** — Perl-side page/branch gating, config JSON, beep, `visibilitychange` (built),
+  browser-support + rollout docs, KPZ build for other installations,
   version tags + CHANGELOG.
 - Later: batch programming, Firefox enterprise note, maybe BroadcastChannel
   multi-tab (explicitly _not_ now, decision 4).
