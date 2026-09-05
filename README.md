@@ -216,7 +216,7 @@ After three read failures in a row it stops by itself rather than retrying forev
 | `autoSubmit`           | `true`  | post the form; `false` fills the box and leaves <kbd>Return</kbd> to a human |
 | `securityBit`          | `true`  | write the tag to the state the transaction is creating (one byte)            |
 | `postedTtl`            | `45`    | seconds a tag stays "already posted" while it sits under the head            |
-| `bookPrefix`           | `"130"` | prefer these over patron cards when picking which barcode to type            |
+| `bookPrefix`           | `"130"` | which barcodes are books: skips patron cards when choosing what to type, words the guard's refusal |
 | `watch`                | `true`  | poll the pad; `false` means one scan per page load                           |
 | `watchIntervalMs`      | `600`   | poll interval                                                                |
 | `programming`          | `false` | allow rewriting what a tag _holds_ — barcode and EPC, not just its bit       |
@@ -257,9 +257,11 @@ downstream complains.
 
 1. The tag must be **on the pad right now**. No writing to a remembered or typed-in
    SID; you cannot mis-position a tag you are holding.
-2. A tag holding something that is not a book barcode (a patron card, anything
-   outside `bookPrefix`) is only overwritten if the caller repeats that exact barcode
-   as `confirm`. A typo does not satisfy it.
+2. **Any change** to a tag that already holds a barcode is refused until the caller repeats
+   that barcode as `confirm` — including book → book, which is the accident that actually
+   happens (the item on screen and the item on the pad are two different books). Erasing
+   counts as a change. Writing the same barcode again does not, because "did it take?" is
+   worth being able to ask twice. A typo does not satisfy `confirm`.
 3. The new barcode may not duplicate another tag on the pad — two items with one
    barcode is a circulation bug that surfaces months later.
 4. 1..16 printable ASCII (the RFID501 field), or `blank` / `3mblank`.

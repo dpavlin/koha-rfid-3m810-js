@@ -8,9 +8,14 @@
  *
  *   1. The tag must be physically on the pad right now. No writing to a typed-in
  *      or remembered SID — you cannot mis-position a tag you are holding.
- *   2. A tag that already holds something that is not a book barcode (a patron
- *      card, anything outside bookPrefix) is only overwritten if the caller
- *      repeats that exact barcode back as `confirm`. Typos cannot satisfy that.
+ *   2. Any change to a tag that already holds a barcode is refused until the
+ *      caller repeats that barcode back as `confirm` — book to book included,
+ *      which is the case to fear rather than the patron card, because both
+ *      barcodes look valid and only the pad knows which book is which. Erasing
+ *      counts as a change; rewriting the same barcode does not, because "did it
+ *      take?" is a legitimate thing to do twice. Typos cannot satisfy `confirm`.
+ *      (bookPrefix survives only to word the message: "a different book" and
+ *      "not a book barcode" are different conversations with a librarian.)
  *   3. The new barcode must not duplicate another tag on the pad: two items with
  *      one barcode is a circulation bug that surfaces months later.
  *   4. 1..16 printable ASCII characters (RFID501 field size), or the words
@@ -40,24 +45,38 @@ export function guard({ tags = [], sid, content, confirm = null, bookPrefix = '1
 		};
 
 	if (typeof content !== 'string' || !content.length) return { ok: false, error: 'no content given' };
-	if (BLANKS.includes(content.toLowerCase())) return { ok: true, blank: true, tag };
-
-	if (content.length > 16)
-		return {
-			ok: false,
-			error: `"${content}" is ${content.length} characters; RFID501 holds 16`,
-		};
-	if (!PRINTABLE.test(content)) return { ok: false, error: 'content must be printable ASCII' };
 
 	const here = tag.content || '';
-	if (!isBlank(here) && !(bookPrefix && here.startsWith(bookPrefix))) {
-		if (String(confirm) !== here) {
+	const erase = BLANKS.includes(content.toLowerCase());
+
+	if (!erase) {
+		if (content.length > 16)
 			return {
 				ok: false,
-				error: `tag holds "${here}", which is not a book barcode — repeat it as confirm to overwrite a patron card or an unknown tag`,
+				error: `"${content}" is ${content.length} characters; RFID501 holds 16`,
 			};
-		}
+		if (!PRINTABLE.test(content)) return { ok: false, error: 'content must be printable ASCII' };
 	}
+
+	// A tag that carries a barcode is somebody's item, and "the tag disagrees with the page"
+	// has no innocent reading: one of the two is the wrong book in front of the librarian. So
+	// every change waits for the caller to repeat what the tag holds. This rule is written
+	// because of a measured desk, not a hypothetical: the page was showing item 561408 while
+	// 1302079605 lay under the head, and the rule this replaces — a barcode inside bookPrefix
+	// may be overwritten freely — would have moved the second book onto the first without
+	// saying a word, since both barcodes begin "130".
+	if (!isBlank(here) && (erase || here !== content) && String(confirm) !== here) {
+		return {
+			ok: false,
+			error: erase
+				? `this tag holds "${here}" — repeat that barcode to erase it`
+				: bookPrefix && here.startsWith(bookPrefix)
+					? `tag holds "${here}", a different book than "${content}" — repeat the tag's own barcode to overwrite it`
+					: `tag holds "${here}", which is not a book barcode — repeat it as confirm to overwrite a patron card or an unknown tag`,
+		};
+	}
+
+	if (erase) return { ok: true, blank: true, tag };
 
 	const twin = tags.find((t) => t.sid.toLowerCase() !== wanted && t.content === content);
 	if (twin)

@@ -337,9 +337,14 @@ Proposal — replace the dead F4 notice with the real thing:
    `DA` because a newly tagged item goes on the shelf checked in.
 4. **Guardrails** (this is where tag programming bites people, so be strict):
     - barcode > 16 bytes → refuse, show the byte count (RFID501 field limit);
-    - tag already holds a _different_ barcode → refuse with "overwrite?" confirm,
-      showing old → new, and require the tag to be re-presented for the confirm
-      (so nobody wipes a live tag left on the pad by accident);
+    - tag already holds a _different_ barcode → refuse, and unlock only by repeating the
+      barcode the tag itself holds. **Implemented** in `guard` (`core/tagwrite.js`), book → book
+      included: the `bookPrefix` rule used to license exactly this overwrite, until a desk was
+      observed showing item 561408 with 1302079605 lying under the head, which is the accident
+      where both barcodes look fine. **Still the panel's job:** show old → new side by side, keep
+      the button disabled while they match, and require the tag to be lifted and put back before
+      a confirm counts — the guard can insist that the caller knows the old value, but only the
+      pad can tell that anybody looked at the tag;
     - tag content unreadable/blank → treat as blank, allow write;
     - after write: re-read, compare, show ✓/✗ with the SIF, and beep only on failure;
     - session write counter + ring buffer (`m0.programs`), exportable as CSV from the panel.
@@ -468,7 +473,8 @@ at }`, with `barcode_before` present only when the tag was not blank. The hard p
   job is that the right barcode reached the right box and that the tag now says what the
   transaction it started means.
 - **M2 programming** — moredetail panel + guardrails + write log + placement photo.
-  _Started:_ the guard (four rules, `core/tagwrite.js`), the write log (`m0.programs`),
+  _Started:_ the guard (four rules in `core/tagwrite.js`; rule 2 was tightened from "tags that
+  are not books" to "any change", 2026-09-05), the write log (`m0.programs`),
   `programming` off by default, read-back verification ✓ — all exercised on a real
   tag. Missing: the UI panel on `moredetail.pl`, and placement photo. The barcode comes from
   the URL + `items`, not from the page's markup (§6.2), and the next step after the panel is

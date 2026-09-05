@@ -98,6 +98,33 @@ test('overwriting a patron card needs the card barcode repeated exactly', async 
 	);
 });
 
+test('a different book on the tag is refused until its own barcode is repeated', () => {
+	// The accident that happens at a real desk: the page shows one item while another lies
+	// under the head. Both barcodes begin with the book prefix, so the rule this replaces —
+	// anything inside bookPrefix may be overwritten — saw nothing to object to.
+	const why = /a different book than "1305271134"/;
+	assert.match(guard({ tags: pad(), sid: BOOK, content: '1305271134' }).error, why);
+	assert.match(
+		guard({ tags: pad(), sid: BOOK, content: '1305271134', confirm: '1305271135' }).error,
+		why,
+		'the barcode you meant to write is not confirmation either',
+	);
+	assert.ok(guard({ tags: pad(), sid: BOOK, content: '1305271134', confirm: '1302099999' }).ok);
+});
+
+test('writing the same barcode again is not a change, so it asks nothing', () => {
+	// "Did that take?" is answered by doing it again; a confirm step here would train people
+	// to click through the one that matters.
+	assert.ok(guard({ tags: pad(), sid: BOOK, content: '1302099999' }).ok);
+});
+
+test('erasing a written tag is a change, so it asks as well', () => {
+	const tags = [{ sid: NEW, content: '1309999998' }];
+	assert.match(guard({ tags, sid: NEW, content: 'blank' }).error, /repeat that barcode to erase it/);
+	assert.ok(guard({ tags, sid: NEW, content: 'blank', confirm: '1309999998' }).ok);
+	assert.ok(guard({ tags: pad(), sid: NEW, content: 'blank' }).ok, 'a blank tag stays free');
+});
+
 test('a barcode already lying next to it is refused', async () => {
 	const g = guard({ tags: pad(), sid: NEW, content: '1302099999' });
 	assert.equal(g.ok, false);
@@ -135,6 +162,7 @@ test('blanking is programming with the empty pattern, and reads back empty', asy
 		tags: [{ sid: NEW, content: '1309999998' }],
 		sid: NEW,
 		content: 'blank',
+		confirm: '1309999998',
 	});
 
 	assert.equal(entry.verified, true);
@@ -164,6 +192,7 @@ test('a blank that leaves the tail of the old barcode is not "verified"', async 
 		tags: [{ sid: NEW, content: '1309999999' }],
 		sid: NEW,
 		content: 'blank',
+		confirm: '1309999999',
 	});
 	assert.equal(entry.content, '', 'the 501 decoder finds an empty barcode field...');
 	assert.equal(entry.empty, false, '...but the tag is not empty');
