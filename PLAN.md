@@ -351,8 +351,10 @@ Proposal — replace the dead F4 notice with the real thing:
     - session write counter + ring buffer (`m0.programs`), exportable as CSV from the panel.
       That is a convenience, **not** an audit trail — see the TODO below.
 
-> **TODO, next step — one audit row in Koha per tag written, carrying the value it
-> replaced.** `m0.programs` lives in the browser of the person who made the change and dies
+> **TODO — one audit row in Koha per tag written, carrying the value it
+> replaced.** The shape is measured and settled (below); the step that is actually next is the
+> one assumption left: prove on the dev box that a cataloger can post to this plugin's route
+> **without** the `plugins` permission (§6.4 assumes it, nobody has tested it). `m0.programs` lives in the browser of the person who made the change and dies
 > with a rebuilt workstation, which is the opposite of an audit. Wanted: one row per successful
 > programming carrying `{ itemnumber, barcode_before, barcode_after, tag_sid, staff_id, branch,
 at }`, with `barcode_before` present only when the tag was not blank. The hard part is
@@ -360,12 +362,24 @@ at }`, with `barcode_before` present only when the tag was not blank. The hard p
 > and `to`, so the client has the pair without touching the reader twice. What is left is a
 > decision and a route:
 >
-> - **Where the row goes.** Koha's own `action_log` (via `C4::Log::actionlog`) is the place
->   people already look, and its `action_extra` column will hold `old → new`; a plugin-owned
->   table is honest and free of syspref surprises but invisible to anyone browsing the staff
->   interface. Prefer `action_log`, and check on this fork that the relevant logging syspref is
->   actually on before designing around it — an audit trail that is silently disabled by a
->   preference is worse than none, because it is believed.
+> - **Where the row goes — measured on the dev box 2026-09-05, which settled it.** The table is
+>   `action_logs` (there is no `action_log`), and on this fork — `koha-common 19.11.05-1` — it is
+>   eight columns: `action_id timestamp user module action object info interface`. **No
+>   `action_extra`, no `action_extraparams`, no `ip`**, so `old → new` goes in `info`
+>   (mediumtext), the item in `object`, the staff number in `user` — which `logaction` fills from
+>   `userenv`, so the client never gets to claim an identity (§6.4's rule, arriving free).
+>   The syspref fear written in the first draft of this bullet does not apply the way we will
+>   call it: `C4::Log::logaction` (installed `C4/Log.pm`) **inserts unconditionally** — the
+>   per-module `CataloguingLog` / `BorrowersLog` preferences gate Koha's own callers, never the
+>   function — so a row the plugin writes cannot be quietly switched off by a box somebody
+>   unticked. What can be switched off is being believed: two weeks of production traffic
+>   (koha.ffzg.hr, read-only counts) show **zero** requests for `admin/action_logs.pl`, so nobody
+>   at this library browses the log UI, while `/plugin` routes carry 17,786. The row still goes
+>   to `action_logs` — it is the one place an auditor already knows to query, and 12.2M rows say
+>   the table survives — but nothing in the design may assume a librarian will look at it in the
+>   staff client, and `module` should be a name that reads well in a query (`RFID`), not one the
+>   UI filters on. A plugin-owned table is the alternative that stays; it is now rejected for the
+>   boring reason that it needs a migration and nobody reads either place.
 > - **How it gets there.** Not `plugins/run.pl`: §6.4 rejected it and §9 Q3 is still open for
 >   the same reason — it needs the `plugins` permission, which catalogers should not have. A
 >   Koha plugin can register its own route (`routes()`), authenticate inside it with
@@ -525,9 +539,11 @@ at }`, with `barcode_before` present only when the tag was not blank. The hard p
    that is the affordance for arming it. Worth it, or should a dormant desk see nothing until
    `?rfid=1`? (`hint: false` hides it; nobody has asked, which is weak evidence that four
    characters in a corner are not a cost.)
-3. Programming audit: settled as "yes, and it is the next step" — see the TODO in §6. What is
-   still open is the shape: `action_log` with `action_extra`, or a table of the plugin's own,
-   and how the route authenticates without handing catalogers the `plugins` permission.
+3. Programming audit: settled as "yes", and the shape is settled too — `action_logs` on this
+   fork has no `action_extra`, so `old → new` rides in `info` and `logaction` writes regardless
+   of any preference (measured, §6 TODO). What is open is one fact and one habit: whether a
+   cataloger without the `plugins` permission can reach the plugin's route, and whether anybody
+   will ever read the row (two weeks of production: zero views of the log UI).
 4. Is the 2012 `moredetail.tt` patch going to stay patched in-tree, or should the new
    plugin _replace_ it by hiding those notices from JS (it can, with a CSS/JS override)?
 5. `Ctrl+Alt+R` and `F4` are both bound now (connect, and program on the item page), so what
