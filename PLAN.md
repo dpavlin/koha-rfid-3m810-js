@@ -358,47 +358,61 @@ Proposal — replace the dead F4 notice with the real thing:
     - tag content unreadable/blank → treat as blank, allow write;
     - after write: re-read, compare, show ✓/✗ with the SIF, and beep only on failure;
     - session write counter + ring buffer (`m0.programs`), exportable as CSV from the panel.
-      That is a convenience, **not** an audit trail — see the TODO below.
+      That is a convenience, **not** an audit trail — see the deferred item below.
 
-> **TODO — one audit row in Koha per tag written, carrying the value it
-> replaced.** The shape is measured and settled (below); the step that is actually next is the
-> one assumption left: prove on the dev box that a cataloger can post to this plugin's route
-> **without** the `plugins` permission (§6.4 assumes it, nobody has tested it). `m0.programs` lives in the browser of the person who made the change and dies
-> with a rebuilt workstation, which is the opposite of an audit. Wanted: one row per successful
-> programming carrying `{ itemnumber, barcode_before, barcode_after, tag_sid, staff_id, branch,
-at }`, with `barcode_before` present only when the tag was not blank. The hard part is
-> already done — `programTag` returns `from` (what the tag held, read back before the write)
-> and `to`, so the client has the pair without touching the reader twice. What is left is a
-> decision and a route:
+> **Deferred, not designed away — one audit row in Koha per tag written, carrying the value
+> it replaced.** What blocks it is not a decision about the row but what 19.11 lets a plugin do
+> about it. There is no way to get a row from a browser into Koha from this plugin on this
+> version that is free, and the three that exist each cost something the plugin should not pay:
 >
-> - **Where the row goes — measured on the dev box 2026-09-05, which settled it.** The table is
->   `action_logs` (there is no `action_log`), and on this fork — `koha-common 19.11.05-1` — it is
->   eight columns: `action_id timestamp user module action object info interface`. **No
->   `action_extra`, no `action_extraparams`, no `ip`**, so `old → new` goes in `info`
->   (mediumtext), the item in `object`, the staff number in `user` — which `logaction` fills from
->   `userenv`, so the client never gets to claim an identity (§6.4's rule, arriving free).
->   The syspref fear written in the first draft of this bullet does not apply the way we will
->   call it: `C4::Log::logaction` (installed `C4/Log.pm`) **inserts unconditionally** — the
->   per-module `CataloguingLog` / `BorrowersLog` preferences gate Koha's own callers, never the
->   function — so a row the plugin writes cannot be quietly switched off by a box somebody
->   unticked. What can be switched off is being believed: two weeks of production traffic
->   (koha.ffzg.hr, read-only counts) show **zero** requests for `admin/action_logs.pl`, so nobody
->   at this library browses the log UI, while `/plugin` routes carry 17,786. The row still goes
->   to `action_logs` — it is the one place an auditor already knows to query, and 12.2M rows say
->   the table survives — but nothing in the design may assume a librarian will look at it in the
->   staff client, and `module` should be a name that reads well in a query (`RFID`), not one the
->   UI filters on. A plugin-owned table is the alternative that stays; it is now rejected for the
->   boring reason that it needs a migration and nobody reads either place.
-> - **How it gets there.** Not `plugins/run.pl`: §6.4 rejected it and §9 Q3 is still open for
->   the same reason — it needs the `plugins` permission, which catalogers should not have. A
->   Koha plugin can register its own route (`routes()`), authenticate inside it with
->   `C4::Auth::checkauth`, and accept a write only for the `itemnumber` the page was showing.
-> - **When it is written.** After a verified write, never before; and a failed audit write must
->   never look like a failed tag write. The tag is the truth, the row is a receipt: keep the
->   receipt in `m0.programs` for retry and say so in the panel.
-> - **What is not logged.** Reads. A write that changed nothing is still worth one row — it
->   records that somebody checked that tag on that date — but an inventory of reads would bury
->   the log in noise.
+> | way                                                                                                          | what it costs                                                                                                                                                                                                                                                                                                                                                                     |
+> | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | `plugins/run.pl?class=…&method=…`, the only HTTP door a 19.11 plugin has                                     | the `plugins` permission, which catalogers must not hold — and it cannot be narrowed: `plugins-home.pl` asks for `{ plugins => '*' }` and `_dispatch('*')` admits a user whose flag is a hashref of sub-permissions, so a narrow `plugins` bit opens the plugin admin home as well. Measured in `C4/Auth.pm`, not reasoned; `permissions` holds no `plugins` rows to grant anyway |
+> | a background `GET` to an enrolled page, handled by the `intranet_js` hook that already runs on every request | a GET that writes: replayable, needing a signed nonce a hook cannot store in a session, and one page render per row                                                                                                                                                                                                                                                               |
+> | one small CGI added to the staff tree, with `checkauth` and our own gate                                     | a file no plugin manager knows about — not in the KPZ, invisible in the plugin UI, survives uninstall                                                                                                                                                                                                                                                                             |
+>
+> All three were put to the person who has to live with the result and none was accepted, so the
+> row waits for an upgrade that gives plugins real routes. What follows is therefore not a design
+> to re-derive but measurements to start from.
+>
+> **Measured on 19.11.05-1 (dev box, read-only).**
+>
+> - the table is `action_logs` (there is no `action_log`) and it has eight columns: `action_id
+timestamp user module action object info interface`. No `action_extra`, no
+>   `action_extraparams`, no `ip` — so `before → after` would ride in `info` (mediumtext), the
+>   item in `object`, and the staff number in `user`, which `logaction` fills from `userenv` so
+>   the client never gets to claim an identity (§6.4's rule, arriving free);
+> - `C4::Log::logaction` **inserts unconditionally** — the per-module `CataloguingLog` /
+>   `BorrowersLog` preferences gate Koha's own callers, never the function. A row the plugin
+>   writes cannot be switched off by a preference, which is also why nobody should be told it is
+>   "configurable": it simply is;
+> - nobody reads it. Two weeks of production traffic: **zero** requests for
+>   `admin/action_logs.pl`, against 17,786 for `/plugin`. The row still belongs in `action_logs`
+>   (12.2M rows, and the one place an auditor already knows to query), but no design may assume a
+>   librarian will see it, and `module` should read well in a query (`RFID`) rather than match the
+>   UI's filter list;
+> - the plugin directory (`/var/lib/koha/<instance>/plugins/`) is outside the `ScriptAlias` and
+>   nothing aliases it — the bundle is inlined into the page — so there is no URL under which a
+>   dropped `.pl` would execute.
+>
+> **Ready for the day the upgrade happens.** `programTag` already returns `{ from, to, sid, afi,
+verified }`, so the client holds the pair without touching the reader twice, and `m0.programs`
+> is already a receipt buffer that a retry can walk. The row wanted is
+> `logaction('RFID', 'MODIFY', $itemnumber, "$before → $after, sid=$sid, branch=$branch", 'intranet')`,
+> written **after** a verified write and never before, deduplicated on `(item, before, after)` for
+> about a minute because F4 gets pressed twice, refused when the `itemnumber` does not match that
+> barcode in `items` (the database is the authority, §6.2), and never presented as a write failure
+> when only the row failed. Reads are not logged.
+>
+> **Four things to check on upgrade:** the route API the new version offers and whether a route
+> declares its own permission (`catalog`) instead of inheriting the `plugins` flag; whether
+> `action_logs` grew `action_extraparams` so the pair stops being a string; whether a cataloger
+> can reach a plugin route without `manage_plugins`; and whether anyone has begun reading the log
+> UI since (§9 Q3).
+>
+> **Meanwhile the record is `m0.programs`** — the browser of the person who made the change,
+> deleted by a rebuilt workstation, which is the opposite of an audit and what the panel says.
+> It is also the argument for CSV export moving up the list rather than down it.
 
 5. **Batch mode** (later): queue of items (paste barcodes / from a shelf-list) →
    present tag N, write, present tag N+1 — the natural next feature once single-item
@@ -506,14 +520,18 @@ at }`, with `barcode_before` present only when the tag was not blank. The hard p
   _Built and driven on real tags, 2026-09-05:_ the panel (`core/panel.js`) — one read, one
   barcode it may write, no field to type another, the arm-then-lift-and-replace confirm, the
   <kbd>F4</kbd> / <kbd>Ctrl+Alt+P</kbd> bindings, and the dead notices hidden while it is
-  live. Missing: [Set IN] / [Set OUT] for the security bit, [Blank], the placement photo, CSV
-  export, and the audit row above.
+  live. Missing: [Blank], the placement photo, and CSV export. [Set IN] /
+  [Set OUT] went away as a requirement (§6.3: programming may only relax a tag to checked-in,
+  never arm one), and the audit row is blocked on the Koha version rather than on us (§6).
   _Started:_ the guard (four rules in `core/tagwrite.js`; rule 2 was tightened from "tags that
   are not books" to "any change", 2026-09-05), the write log (`m0.programs`),
   `programming` off by default, read-back verification ✓ — all exercised on a real
   tag. Missing: the UI panel on `moredetail.pl`, and placement photo. The barcode comes from
-  the URL + `items`, not from the page's markup (§6.2), and the next step after the panel is
-  the audit row in Koha (§6, TODO).
+  the URL + `items`, not from the page's markup (§6.2). The audit row that was going to be the
+  next step cannot be built on 19.11 without spending either the permission model, HTTP's verb,
+  or the install's tidiness (§6), so it waits for an upgrade — which leaves `m0.programs`, a
+  browser-side buffer, as the only record there is, and makes CSV export the item it should
+  have been all along.
 - **M3 polish** — Perl-side page/branch gating, config JSON, beep, `visibilitychange`,
   CSV export, browser-support + rollout docs, KPZ build for other installations,
   version tags + CHANGELOG.
@@ -554,11 +572,12 @@ at }`, with `barcode_before` present only when the tag was not blank. The hard p
    that is the affordance for arming it. Worth it, or should a dormant desk see nothing until
    `?rfid=1`? (`hint: false` hides it; nobody has asked, which is weak evidence that four
    characters in a corner are not a cost.)
-3. Programming audit: settled as "yes", and the shape is settled too — `action_logs` on this
-   fork has no `action_extra`, so `old → new` rides in `info` and `logaction` writes regardless
-   of any preference (measured, §6 TODO). What is open is one fact and one habit: whether a
-   cataloger without the `plugins` permission can reach the plugin's route, and whether anybody
-   will ever read the row (two weeks of production: zero views of the log UI).
+3. Programming audit: wanted, fully specified, and **deferred until after a Koha upgrade**. The
+   row and its rules are written down (§6); what is missing is a way for a 19.11 plugin to be
+   asked for it without granting catalogers the `plugins` flag, writing on a GET, or dropping a
+   file into the staff tree — and all three were refused. Revisit when the version has real
+   plugin routes, checking the four things listed there; and check whether anyone has started
+   reading the log UI in the meantime (two weeks of production: zero).
 4. Is the 2012 `moredetail.tt` patch going to stay patched in-tree, or should the new
    plugin _replace_ it by hiding those notices from JS (it can, with a CSS/JS override)?
 5. `Ctrl+Alt+R` and `F4` are both bound now (connect, and program on the item page), so what
