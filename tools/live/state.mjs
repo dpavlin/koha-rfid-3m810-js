@@ -41,7 +41,7 @@ export const PROBE = `(() => {
   // what matters (what just happened), so the tail is what ships, and the count of what was
   // dropped is printed rather than quietly lost.
   const TAIL = 200;
-  const rest = {}; if (m0) for (const k of Object.keys(m0)) if (k !== 'log') rest[k] = m0[k];
+  const rest = {}; if (m0) for (const k of Object.keys(m0)) if (k !== 'log' && k !== 'logDropped') rest[k] = m0[k];
   return JSON.stringify({
     page: {
       href: location.href,
@@ -69,8 +69,9 @@ export const PROBE = `(() => {
     },
     server: { RFID_CONTEXT: window.RFID_CONTEXT || null, RFID_CONFIG: window.RFID_CONFIG || null, RFID_ITEM: window.RFID_ITEM || null },
     plugin: m0 ? json(rest) : null,
-    // `total` is what the page saw, not what it still holds: m0.log is a ring (logLines), and
-    // a tab that dropped 8,000 lines must not look like a tab that only ever wrote 200.
+    // total is what the page saw, not what it still holds: m0.log is a ring (logLines), and a
+    // tab that dropped 8,000 lines must not look like a tab that only ever wrote 200.
+    // (No backticks in here: this whole probe is a template literal, and one closed it early.)
     log: {
       total: log.length + ((m0 && m0.logDropped) || 0),
       droppedByRing: (m0 && m0.logDropped) || 0,
