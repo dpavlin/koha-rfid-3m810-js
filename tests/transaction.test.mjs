@@ -371,6 +371,42 @@ test('a book that left the pad mid-write is still returned, and the log says the
 	);
 });
 
+test('a posted entry is pruned out of storage, not merely ignored on read', async () => {
+	// Reading has always filtered these by TTL, so the entry could never change behaviour — but
+	// it stayed in sessionStorage until something rewrote the key, which made `rfid_posted` in a
+	// state dump look like a history of the day instead of a 45-second anti-loop flag list.
+	const stale = { rfid_posted: JSON.stringify({ 'checkin:1300000001': Date.now() - 3600_000 }) };
+	const d = desk({ tags: [BOOK], session: stale, config: { postedTtl: 45, autoSubmit: false } });
+	await d.m0.done;
+	await settled();
+
+	const left = JSON.parse(d.session.rfid_posted || '{}');
+	assert.equal(left['checkin:1300000001'], undefined, 'read once, written back without it');
+	assert.deepEqual(Object.keys(left), [], 'and nothing else was remembered (autoSubmit off, no post)');
+});
+
+test('the log is a ring: a tab open all day keeps the newest lines and counts the rest', async () => {
+	// A desk tab runs from opening to closing and the log gets a line per poll. Compared with a
+	// control run of the same scenario rather than a hardcoded count: what boot says on the way
+	// up is its own business, "the ceiling holds and the survivors are the newest" is not.
+	const scenario = { tags: [BOOK], config: { autoSubmit: false } };
+	const control = desk({ ...scenario });
+	await control.m0.done;
+	await settled();
+	const n = control.m0.log.length;
+	assert.ok(n >= 2, `this scenario writes ${n} line(s); a one-line log tests no ceiling`);
+
+	const d = desk({ tags: [BOOK], config: { autoSubmit: false, logLines: 1 } });
+	await d.m0.done;
+	await settled();
+
+	assert.equal(d.m0.log.length, 1, 'one line kept, nothing more');
+	assert.equal(d.m0.logDropped, n - 1, 'and it says how many it dropped, rather than forgetting');
+	// Each desk keeps its own clock, so compare the words and not the timestamp prefix.
+	const body = (l) => l.replace(/^\S+\s+/, '');
+	assert.equal(body(d.m0.log[0]), body(control.m0.log.at(-1)), 'the survivor is the newest line');
+});
+
 test('the posted memory expires, so a stuck tag cannot block the desk forever', async () => {
 	const stale = { rfid_posted: JSON.stringify({ [`checkin:${BOOK.content}`]: Date.now() - 60_000 }) };
 	const d = desk({ tags: [BOOK], session: stale, config: { postedTtl: 45 } });

@@ -299,7 +299,7 @@ sub intranet_js {
         # Only client-side keys go to the browser — pages/branches/users stay server side.
         my %client_config = map { exists $cfg->{$_} ? ($_ => $cfg->{$_}) : () }
             qw(hint debug bookPrefix programming fill autoSubmit securityBit postedTtl
-                watch watchIntervalMs pauseWatchWhenHidden);
+                watch watchIntervalMs pauseWatchWhenHidden logLines);
 
         # The item this page is about, for the programming panel: only on the page that
         # shows one, and only where writing is switched on at all. Its own eval, because a

@@ -224,7 +224,15 @@ value whose tag has gone is stale and is replaced, which is what makes a stack a
   talk to it), `rfid_keepwatching` (`?rfid=keep`). Per-tab in `sessionStorage`:
   `rfid_posted` — which barcodes were posted into which box, and when (§3.2). It has to
   survive the reload the plugin causes and die with the tab, so it is neither a variable
-  nor localStorage; `rfidM0.posted()` reads it.
+  nor localStorage; `rfidM0.posted()` reads it. Entries older than `postedTtl` are dropped on
+  read **and written back**, not merely ignored: a stale entry could never change behaviour, but
+  it sat in `sessionStorage` until something rewrote the key, which let a state dump present a
+  45-second anti-loop flag list as if it were the day's history.
+- Nothing else persists. The wire log (`m0.log`) and the tag-write log (`m0.programs`) are
+  page-memory only — the first is a ring (`logLines`, default 3000, with `m0.logDropped`
+  counting what fell off, because a tab open from opening time to closing time reached 10,919
+  lines in one morning), and the second is why the audit row is wanted (§6) and what
+  `tools/live/state.mjs` exists to capture before the page goes away.
 - No syspref, no DB writes, no admin page needed to run it. There is no per-user
   preference layer yet — see §9.6, parked for the end.
 

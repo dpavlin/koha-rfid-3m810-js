@@ -223,17 +223,18 @@ as hidden, so a workstation that keeps Koha behind a spreadsheet can opt out wit
 pill's tooltip says `watch paused (tab hidden)` when this is why nothing happens.
 After three read failures in a row it stops by itself rather than retrying forever.
 
-| config key             | default | effect                                                                                             |
-| ---------------------- | ------- | -------------------------------------------------------------------------------------------------- |
-| `fill`                 | `true`  | type the scanned barcode into the focused box at all                                               |
-| `autoSubmit`           | `true`  | post the form; `false` fills the box and leaves <kbd>Return</kbd> to a human                       |
-| `securityBit`          | `true`  | write the tag to the state the transaction is creating (one byte)                                  |
-| `postedTtl`            | `45`    | seconds a tag stays "already posted" while it sits under the head                                  |
-| `bookPrefix`           | `"130"` | which barcodes are books: skips patron cards when choosing what to type, words the guard's refusal |
-| `watch`                | `true`  | poll the pad; `false` means one scan per page load                                                 |
-| `watchIntervalMs`      | `600`   | poll interval                                                                                      |
-| `programming`          | `false` | allow rewriting what a tag _holds_ — barcode and EPC, not just its bit                             |
-| `pauseWatchWhenHidden` | `true`  | pause polling while the tab is not in front                                                        |
+| config key             | default | effect                                                                                                                                                                  |
+| ---------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fill`                 | `true`  | type the scanned barcode into the focused box at all                                                                                                                    |
+| `autoSubmit`           | `true`  | post the form; `false` fills the box and leaves <kbd>Return</kbd> to a human                                                                                            |
+| `securityBit`          | `true`  | write the tag to the state the transaction is creating (one byte)                                                                                                       |
+| `postedTtl`            | `45`    | seconds a tag stays "already posted" while it sits under the head                                                                                                       |
+| `bookPrefix`           | `"130"` | which barcodes are books: skips patron cards when choosing what to type, words the guard's refusal                                                                      |
+| `watch`                | `true`  | poll the pad; `false` means one scan per page load                                                                                                                      |
+| `watchIntervalMs`      | `600`   | poll interval                                                                                                                                                           |
+| `programming`          | `false` | allow rewriting what a tag _holds_ — barcode and EPC, not just its bit                                                                                                  |
+| `pauseWatchWhenHidden` | `true`  | pause polling while the tab is not in front                                                                                                                             |
+| `logLines`             | `3000`  | how much of its own log a page keeps: the oldest lines are dropped and counted in `m0.logDropped`, because a desk tab is open all day and the log grows with every poll |
 
 `securityBit` and `programming` are different capabilities and are switched separately:
 one sets a byte that says where the book is supposed to be, the other overwrites what the

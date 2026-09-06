@@ -70,11 +70,28 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 		watching: false,
 		programs: [],
 		log: [],
+		logDropped: 0,
 	};
 	win.rfidM0 = m0;
+	// Config before anything can log: the log ceiling is a config value, and the first line this
+	// plugin ever writes — "no navigator.serial, staying dormant" — is written before the dormancy
+	// checks below, so a cap that resolved later would be a temporal dead zone on the one page
+	// where the plugin must not throw.
+	const cfg = m0.config;
 
+	// A desk tab lives from opening time to closing time, and the log gets a line per poll and
+	// per wire frame: one real tab reached 10,919 lines in a morning, which is 600 KB of state
+	// dump and all of it oldest-first noise. Keep the newest, count what was dropped, and let a
+	// tester raise the ceiling (logLines) instead of editing the constant while debugging.
+	const LOG_CAP = 3000;
 	const note = (step, value) => {
 		m0.log.push(`${now()} ${step}${value === undefined ? '' : ': ' + value}`);
+		const cap = cfg.logLines === undefined ? LOG_CAP : Number(cfg.logLines) || 0;
+		if (cap > 0 && m0.log.length > cap) {
+			const cut = m0.log.length - cap;
+			m0.log.splice(0, cut);
+			m0.logDropped += cut;
+		}
 		return m0.log.length;
 	};
 	const safe = (what, fn) => {
@@ -100,7 +117,6 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 	}
 	m0.hasSerial = true;
 
-	const cfg = m0.config;
 	const isArmed = () => store.get(ARM_KEY) === '1';
 	const setArmed = (on) => (on ? store.set(ARM_KEY, '1') : store.del(ARM_KEY));
 
@@ -271,7 +287,11 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 	const postedTtlMs = () => (cfg.postedTtl === undefined ? 45 : cfg.postedTtl) * 1000;
 
 	// Pruned on every read: these entries exist to stop a loop, and a loop cannot have
-	// started before the TTL has passed since the last page load.
+	// started before the TTL has passed since the last page load. The pruning is also written
+	// back, because reading alone left the stale keys sitting in sessionStorage until something
+	// happened to write the list — so a desk tab that transacted one book at 08:00 still showed
+	// `rfid_posted` entries from 08:00 at 17:00, in a dump, looking like a history of the day.
+	// It is a 45-second anti-loop flag list, and the dump should not be able to suggest otherwise.
 	const postedMap = () => {
 		let raw = null;
 		safe('sessionStorage.get', () => (raw = win.sessionStorage.getItem(POST_KEY)));
@@ -281,7 +301,10 @@ export function install(win, { now = () => Date.now(), boot = bootReader } = {})
 		} catch {
 			map = {};
 		}
-		for (const k of Object.keys(map)) if (now() - map[k] > postedTtlMs()) delete map[k];
+		const ttl = postedTtlMs();
+		let stale = 0;
+		for (const k of Object.keys(map)) if (now() - map[k] > ttl) (delete map[k], stale++);
+		if (stale) savePosted(map);
 		return map;
 	};
 	const savePosted = (map) =>

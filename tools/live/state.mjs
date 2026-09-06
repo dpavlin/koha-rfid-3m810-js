@@ -69,7 +69,15 @@ export const PROBE = `(() => {
     },
     server: { RFID_CONTEXT: window.RFID_CONTEXT || null, RFID_CONFIG: window.RFID_CONFIG || null, RFID_ITEM: window.RFID_ITEM || null },
     plugin: m0 ? json(rest) : null,
-    log: { total: log.length, shown: Math.min(log.length, TAIL), lines: json(log.slice(-TAIL)) },
+    // `total` is what the page saw, not what it still holds: m0.log is a ring (logLines), and
+    // a tab that dropped 8,000 lines must not look like a tab that only ever wrote 200.
+    log: {
+      total: log.length + ((m0 && m0.logDropped) || 0),
+      droppedByRing: (m0 && m0.logDropped) || 0,
+      droppedByDump: Math.max(0, log.length - TAIL),
+      shown: Math.min(log.length, TAIL),
+      lines: json(log.slice(-TAIL)),
+    },
     storage: { localStorage: store(localStorage), sessionStorage: store(sessionStorage) },
   }, null, 1);
 })()`;
