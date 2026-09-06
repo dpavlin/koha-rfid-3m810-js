@@ -4,15 +4,33 @@ Every claim in `PLAN.md` about what the plugin does on a real Koha page came fro
 of these. They are scripts for `browser_execute`, kept so a claim can be re-checked in
 a minute instead of re-derived in an hour.
 
-| script                 | what it answers                                                                                                                          |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `focus-map.mjs`        | what fields a scan could land in, on each page — ids, forms, where they post, which carry an `accesskey`                                 |
-| `intent-probe.mjs`     | what the plugin says it would do with a tag for each of those boxes, and what the pill looks like                                        |
-| `accesskey-probe.mjs`  | whether Koha's own `accesskey="r"` lands the cursor where the plugin agrees — and finds the decoy (`accesskey="q"`, the catalog search)  |
-| `capture-circ-dom.mjs` | the page shapes into `tests/fixtures/` so they stop being memory                                                                         |
-| `page-logic.mjs`       | does the filled box land in the form that performs the transaction                                                                       |
-| `corner-probe.mjs`     | the pill's geometry: does it sit on top of anything Koha needs                                                                           |
-| `write-log.mjs`        | what the plugin wrote to tags in this tab, as CSV — plus the pad, the gate, where the cursor is, and whether the 2012 notices are hidden |
+| script                 | what it answers                                                                                                                                                                                                                                                                                                                                                                          |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `focus-map.mjs`        | what fields a scan could land in, on each page — ids, forms, where they post, which carry an `accesskey`                                                                                                                                                                                                                                                                                 |
+| `intent-probe.mjs`     | what the plugin says it would do with a tag for each of those boxes, and what the pill looks like                                                                                                                                                                                                                                                                                        |
+| `accesskey-probe.mjs`  | whether Koha's own `accesskey="r"` lands the cursor where the plugin agrees — and finds the decoy (`accesskey="q"`, the catalog search)                                                                                                                                                                                                                                                  |
+| `capture-circ-dom.mjs` | the page shapes into `tests/fixtures/` so they stop being memory                                                                                                                                                                                                                                                                                                                         |
+| `page-logic.mjs`       | does the filled box land in the form that performs the transaction                                                                                                                                                                                                                                                                                                                       |
+| `corner-probe.mjs`     | the pill's geometry: does it sit on top of anything Koha needs                                                                                                                                                                                                                                                                                                                           |
+| `state.mjs`            | everything the tab knows, as JSON: page and params, where the cursor is, the pill's text, the barcode fields and where they post, `RFID_CONTEXT`/`CONFIG`/`ITEM`, all of `m0` (gate, pad tags, tag writes, `paused` reason), the wire log (last 200 lines of it) and localStorage + sessionStorage. No flags — `node tools/live/state.mjs > state.json`, and it prints which tab it read |
+| `write-log.mjs`        | what the plugin wrote to tags in this tab, as CSV — plus the pad, the gate, where the cursor is, and whether the 2012 notices are hidden                                                                                                                                                                                                                                                 |
+
+`state.mjs` is the one that runs from a plain shell, because "what does the desk's browser think
+right now" should not need an agent to answer:
+
+```sh
+node tools/live/state.mjs > state.json     # report on stderr: which tab it read
+node tools/live/state.mjs | jq '.plugin.tags, .storage.sessionStorage.rfid_posted'
+```
+
+No flags. It probes `127.0.0.1:9222` then `9333` for a DevTools endpoint, takes the first Koha tab
+and reads it — one `Runtime.evaluate`, no navigation, no login, no click. It needs Chrome started
+with `--remote-debugging-port`, which is an unauthenticated driver for the whole browser: keep it
+on loopback, and never open that port to a network to make a dump easier.
+
+It is where `paused` becomes visible. A desk can show a green pill and `gate: ready` while the pad
+watch is dead (`m0.paused = "gave up after 3 read failures"`, usually because another tab holds
+the serial port), because the pill puts the reason in its tooltip, where nobody looks.
 
 `write-log.mjs` is different from the rest: it dumps `m0.programs`, the ring buffer of tag
 writes, which is the only record of a programming session while the Koha-side audit row stays
