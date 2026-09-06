@@ -13,14 +13,13 @@ a minute instead of re-derived in an hour.
 | `page-logic.mjs`       | does the filled box land in the form that performs the transaction                                                                                                                                                                                                                                                                                                                       |
 | `corner-probe.mjs`     | the pill's geometry: does it sit on top of anything Koha needs                                                                                                                                                                                                                                                                                                                           |
 | `state.mjs`            | everything the tab knows, as JSON: page and params, where the cursor is, the pill's text, the barcode fields and where they post, `RFID_CONTEXT`/`CONFIG`/`ITEM`, all of `m0` (gate, pad tags, tag writes, `paused` reason), the wire log (last 200 lines of it) and localStorage + sessionStorage. No flags — `node tools/live/state.mjs > state.json`, and it prints which tab it read |
-| `write-log.mjs`        | what the plugin wrote to tags in this tab, as CSV — plus the pad, the gate, where the cursor is, and whether the 2012 notices are hidden                                                                                                                                                                                                                                                 |
 
 `state.mjs` is the one that runs from a plain shell, because "what does the desk's browser think
 right now" should not need an agent to answer:
 
 ```sh
-node tools/live/state.mjs > state.json     # report on stderr: which tab it read
-node tools/live/state.mjs | jq '.plugin.tags, .storage.sessionStorage.rfid_posted'
+node tools/live/state.mjs > state.json     # stderr says which tab it read
+node tools/live/state.mjs | jq '.plugin.tags, .plugin.programs, .storage.sessionStorage.rfid_posted'
 ```
 
 No flags. It probes `127.0.0.1:9222` then `9333` for a DevTools endpoint, takes the first Koha tab
@@ -32,18 +31,18 @@ It is where `paused` becomes visible. A desk can show a green pill and `gate: re
 watch is dead (`m0.paused = "gave up after 3 read failures"`, usually because another tab holds
 the serial port), because the pill puts the reason in its tooltip, where nobody looks.
 
-`write-log.mjs` is different from the rest: it dumps `m0.programs`, the ring buffer of tag
-writes, which is the only record of a programming session while the Koha-side audit row stays
-blocked (PLAN §6). It is the replacement for a CSV button — the file's only consumer is a test
-run, so it lives here rather than in a panel librarians would have to ignore forever. Two rules
-follow from where the data lives, and both are in the code:
+`state.mjs` is also the export for tag writes: `.plugin.programs` is the ring buffer of what the
+page wrote, which is the only record of a programming session while the Koha-side audit row stays
+blocked (PLAN §6) — the reason there is no CSV button in the panel is that the only consumer of
+that file is a test run. Two rules follow from where the data lives, and they bind every script
+here that reads a tab:
 
-- **it never navigates.** The buffer is an array on a page's `window`; `k.open()` attaches by
-  calling `Page.navigate`, so a tool that navigates to help erases its own evidence and prints a
-  clean empty CSV over the grave. It attaches by target id instead.
-- **it never logs in.** A tab at the staff login page has no plugin and no buffer, and there is
-  nothing to recover; the tool says so and stops. If a dump ever starts working by itself, that
-  is a bug — it would mean it was fabricating a session to look successful.
+- **never navigate to help.** The state is on a page's `window`; `k.open()` attaches by calling
+  `Page.navigate`, so a tool that navigates erases its own evidence and reports a clean empty
+  result over the grave. Attach by target id, or with `Runtime.evaluate` alone.
+- **never log in to help.** A tab at the staff login page has no plugin and no buffer, and there
+  is nothing to recover. A dump that starts succeeding on its own has begun fabricating the
+  conditions of its own success.
 
 Dump after programming, before navigating away or logging out.
 
