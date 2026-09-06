@@ -30,7 +30,9 @@ formatted with, now pinned in `.prettierrc.json`. `npx prettier --write` before 
 existed used prettier's defaults (2 spaces, double quotes) and reformatted every file in
 `src/` and `tests/`, which buried a 300-line change under 1,200 lines of indentation and had
 to be undone by writing the config and re-running. Check formatting config before blaming a
-tool for a large diff.
+tool for a large diff. Prettier also **re-pads markdown tables**, so an `edit` anchor copied
+from an earlier read of a table row stops matching after any prettier run — insert rows with a
+script and let prettier align them.
 
 ## The cursor is the routing decision — read the form, never the field name or the page
 
@@ -73,10 +75,20 @@ a **real** interval in tests, and `node --test` then prints its results and hang
 timeout, which looks exactly like a slow machine.
 
 The live version of this trap: `watch()` in `src/main.js` uses the global `setTimeout`, not
-the window's. Any test that installs against a *ready* reader therefore starts a real timer
+the window's. Any test that installs against a _ready_ reader therefore starts a real timer
 chain unless the config says `watch: false` — which is what `tests/transaction.test.mjs`
 passes. `tests/helpers/fakewindow.mjs` fakes and records the window's timers, so an
 accidental global one shows up as a missing handle rather than a mysterious 120 s run.
+
+## Two seams that silently swallow config
+
+- A client-side config key is **whitelisted in `RFID.pm`** (`qw(hint debug bookPrefix …
+logLines)` in `intranet_js`). Add the key to `koha-rfid.json` and forget the whitelist and the
+  browser never sees it, with nothing to read back the omission.
+- In `src/core/boot.js`, **`cfg` must stay declared above `note()`**: the first line the plugin
+  ever writes (`no navigator.serial — staying dormant`) runs before the dormancy checks, and the
+  log ceiling (`logLines`) is read inside `note()`. Declaring `cfg` later is a temporal dead zone
+  on exactly the page where the plugin must not throw.
 
 ## Where the fork's own code lives (read templates there, not /usr/share)
 
@@ -90,15 +102,55 @@ under `NEEDSCONFIRMATION`, which a fill-on-scan has to respect.
 
 ## Logging in, and where the credentials are
 
-Live verification uses the dev staff client at `https://ffzg.koha-dev.rot13.org:8443`,
-and the CDP Chrome profile is `~/tmp/koha-rfid-chrome`. Credentials: **`~/koha-dev.env`**
+Live verification uses the dev staff client at `https://ffzg.koha-dev.rot13.org:8443`. The
+Chrome that carries the Koha tabs, the serial reader and the CDP endpoint is launched with
+`--user-data-dir=~/.ds4/browser --remote-debugging-port=9333`; that port is an unauthenticated
+driver for the whole browser — loopback only, and never opened to a network to make a dump
+easier. Credentials: **`~/koha-dev.env`**
 (`KOHA_USER`, `KOHA_PASS`, `KOHA_URL`) — read them from there with
 `.pi/browser-execute-workspace/koha-cdp.mjs`'s `login(session)`; never paste a password
 into a snippet, and never guess one. Sessions expire mid-work and the failure is
 silent: the staff page comes back containing `#loginform`.
 
-18.11 quirk worth knowing: `#Login` is the submit *input*, not the form — submitting it
+18.11 quirk worth knowing: `#Login` is the submit _input_, not the form — submitting it
 throws, which looks exactly like a failed login.
+
+## Driving that browser over CDP
+
+- **Any navigation kills the attached session.** After `login()`, `Page.navigate`, or a page
+  posting a form, the old session id is gone (`Session with given id not found`). Re-attach
+  inside the same snippet: `try { session.close() } catch {}` → `session.connect()` →
+  `k.open(session, url)` → evaluate. A second snippet that assumes the session survived fails.
+- **`console.log` inside an imported module is not captured** — only the snippet's console is.
+  A tool imported from `tools/live/` must return its report and let the snippet print it, or it
+  is silent exactly where it is being watched.
+- **A CDP `id` match is not a response.** `Runtime.evaluate` answers with an empty `{result:{}}`
+  frame now and then; resolve only on `result.result`, or the tool reports `undefined is not
+valid JSON` about a page that answered fine.
+- **`state.mjs` never navigates and never logs in.** The state it dumps is on a page's `window`:
+  navigating to help erases the evidence it came for, and a tab at the staff login page has
+  nothing to recover. A dump that succeeds by fixing the tab is fabricating its own conditions.
+- **Koha loads with the cursor in a search field**, and the plugin refuses <kbd>F4</kbd> while a
+  field has focus (by design). A live probe that presses <kbd>F4</kbd> without blurring first
+  measures nothing.
+- `browser_execute` wraps the snippet body in `(...)`: an expression list with `;` will not
+  parse — use `(() => { ... })()`.
+
+## Production is log files, and nothing else
+
+`koha.ffzg.hr` is the live library and runs **no RFID plugin at all**. It is read through
+`/var/log/apache2/other_vhosts_access.log*` (grep only): that is where the page-usage counts in
+PLAN come from. No queries against its database, no files written, no commands run to "just
+check a version" — the dev box (`koha-dev.rot13.org`, instance `ffzg`) is where anything is
+measured or changed.
+
+## The dev install's version decides what is possible
+
+It is `koha-common 19.11.05-1`: **no plugin `routes()`** (the only plugin HTTP entry is
+`plugins/run.pl`, gated on the `plugins` permission), `action_logs` has eight columns with no
+`action_extra`, and `C4::Log::logaction` inserts regardless of any preference. These are
+measured, with the consequences for the audit row, in **PLAN §6** — read it before designing
+any server-side round trip.
 
 ## Verifying against real Koha
 
